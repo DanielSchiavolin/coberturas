@@ -14,7 +14,7 @@ App separado do QTI Monitor (banco de dados próprio). Mesmos postos (QTHs) e me
 - **Tempo real**: se um atualiza, todos veem (Firebase Realtime Database).
 
 - **Tirar do posto**: o ✕ no nome do QRA (card do posto) ou "🚫 Tirar do posto" na lista. O QRA continua cadastrado como **reserva** e pode cobrir.
-- **Fim de semana dos postos híbridos**: a partir de segunda-feira, todo turno de sábado/domingo sem ninguém (sem titular presente e sem cobertura) fica alertando (borda laranja no posto, seção no topo de "Folgas & Coberturas", som a cada 2 h) até ser preenchido.
+- **Fim de semana dos postos híbridos**: a partir de segunda-feira, todo turno de sábado/domingo sem ninguém (sem titular presente e sem cobertura) fica alertando (card piscando, seção no topo de "Folgas & Coberturas", som a cada 2 h) até ser preenchido.
 
 ## Turnos e vagas
 Mesmo modelo do QTI: Turno 1 (☀️ Diurno) 00:00–16:59 · Turno 2 (🌙 Noturno) 17:00–23:59.
