@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Front Security - Coberturas</title>
+    <meta name="description" content="Controle de QRAs, folgas e coberturas dos postos da Front Security em tempo real.">
+    <meta name="theme-color" content="#1B2A4A">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- ===== HEADER ===== -->
+    <header id="app-header">
+        <div class="header-brand">
+            <svg class="header-logo" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="20" cy="25" r="18" stroke="#F5A623" stroke-width="4" fill="none"/>
+                <circle cx="20" cy="25" r="10" fill="#1B2A4A" stroke="#1B2A4A" stroke-width="3"/>
+                <circle cx="20" cy="25" r="3" fill="#FFFFFF"/>
+                <circle cx="32" cy="10" r="4" fill="#F5A623"/>
+                <path d="M35 15 L35 40 L45 40" stroke="#1B2A4A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M35 15 L35 28 L44 28" stroke="#1B2A4A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M8 8 A20 20 0 0 1 32 8" stroke="#1B2A4A" stroke-width="4" stroke-linecap="round" fill="none"/>
+            </svg>
+            <div class="header-text">
+                <h1 class="header-title">FRONT SECURITY</h1>
+                <span class="header-subtitle">Coberturas</span>
+            </div>
+        </div>
+        <div class="header-info">
+            <div class="header-connection">
+                <span id="connection-status" class="conn-dot disconnected"></span>
+                <span id="connection-text" class="conn-text">Offline</span>
+            </div>
+            <div class="header-time">
+                <div id="clock" class="clock">--:--:--</div>
+                <div id="current-date" class="current-date">--</div>
+            </div>
+            <span id="pending-count" class="pending-badge">Carregando...</span>
+        </div>
+    </header>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="main-content">
+        <nav class="view-tabs" role="tablist">
+            <button class="view-tab active" data-view="postos" role="tab">🏢 Postos</button>
+            <button class="view-tab" data-view="qras" role="tab">👥 QRAs <span id="qra-count" class="tab-count"></span></button>
+            <button class="view-tab" data-view="agenda" role="tab">📅 Folgas &amp; Coberturas <span id="agenda-count" class="tab-count"></span></button>
+        </nav>
+
+        <section id="view-postos" class="view active">
+            <div id="posts-container">
+                <div class="loading-state">
+                    <div class="loading-spinner"></div>
+                    <p>Conectando ao servidor...</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-qras" class="view">
+            <div class="toolbar">
+                <input type="search" id="qra-search" class="form-input" placeholder="🔎 Buscar QRA ou posto...">
+                <button id="add-qra-btn" class="btn-primary btn-inline">➕ Novo QRA</button>
+            </div>
+            <div id="qra-list"></div>
+        </section>
+
+        <section id="view-agenda" class="view">
+            <div class="toolbar">
+                <button id="add-folga-btn" class="btn-primary btn-inline">🏖️ Nova Folga</button>
+                <button id="add-cobertura-btn" class="btn-primary btn-inline btn-cover">🔁 Nova Cobertura</button>
+            </div>
+            <div id="agenda-list"></div>
+        </section>
+    </main>
+
+    <!-- ===== FLOATING ACTION BUTTONS ===== -->
+    <div class="fab-container">
+        <button id="config-btn" class="fab fab-config" data-tooltip="Configurações Firebase" aria-label="Configurações">⚙️</button>
+        <button id="add-post-btn" class="fab fab-add" data-tooltip="Adicionar novo posto" aria-label="Adicionar posto">➕</button>
+    </div>
+
+    <!-- ===== FIREBASE SETUP MODAL ===== -->
+    <div id="firebase-setup-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="modal-title">🔧 Configuração Firebase</h2>
+            <p style="margin-bottom: 12px; color: rgba(255,255,255,0.8); font-size: 0.9rem;">
+                Este app usa um banco próprio, separado do QTI Monitor. Cole abaixo o firebaseConfig do projeto de coberturas:
+            </p>
+            <div class="form-group">
+                <label class="form-label" for="firebase-config-input">Configuração Firebase (JSON)</label>
+                <textarea id="firebase-config-input" class="form-input firebase-config-input" placeholder='{
+  "apiKey": "sua-api-key",
+  "authDomain": "seu-projeto.firebaseapp.com",
+  "databaseURL": "https://seu-projeto-default-rtdb.firebaseio.com",
+  "projectId": "seu-projeto",
+  "appId": "1:123:web:abc123"
+}'></textarea>
+            </div>
+            <button id="save-firebase-config" class="btn-primary">🚀 Conectar ao Firebase</button>
+        </div>
+    </div>
+
+    <!-- ===== ADD/EDIT POST MODAL ===== -->
+    <div id="add-post-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close" data-close="add-post-modal" aria-label="Fechar">✕</button>
+            <h2 id="add-post-modal-title" class="modal-title">➕ Novo Posto</h2>
+            <input type="hidden" id="edit-post-id" value="">
+
+            <div class="form-group">
+                <label class="form-label" for="new-post-name">Nome do Posto</label>
+                <input type="text" id="new-post-name" class="form-input" placeholder="Ex: Vila Nova">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="new-post-category">Categoria</label>
+                <select id="new-post-category" class="form-select">
+                    <option value="Segurança Econ">Segurança Econ</option>
+                    <option value="Segurança Nurban">Segurança Nurban</option>
+                    <option value="Segurança Kallas">Segurança Kallas</option>
+                    <option value="Segurança Cursino">Segurança Cursino</option>
+                    <option value="Limpeza">Limpeza</option>
+                    <option value="custom">+ Nova Categoria...</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="custom-category-group" style="display: none;">
+                <label class="form-label" for="new-post-custom-category">Nome da Nova Categoria</label>
+                <input type="text" id="new-post-custom-category" class="form-input" placeholder="Ex: Segurança Nova">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="new-post-escala-type">Tipo de Escala</label>
+                <select id="new-post-escala-type" class="form-select">
+                    <option value="diurno">☀️ Diurno (00h às 17h)</option>
+                    <option value="noturno">🌙 Noturno (17h às 00h)</option>
+                    <option value="24h">🔄 24 Horas</option>
+                    <option value="hibrido">📅 Híbrido (Por dia da semana)</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="group-alert-diurno">
+                <label class="form-label" for="new-post-alert-diurno">Horário de Alerta - Turno 1 (00:00 às 17:00)</label>
+                <input type="time" id="new-post-alert-diurno" class="form-input" value="04:00">
+            </div>
+
+            <div class="form-group" id="group-alert-noturno">
+                <label class="form-label" for="new-post-alert-noturno">Horário de Alerta - Turno 2 (17:00 às 00:00)</label>
+                <input type="time" id="new-post-alert-noturno" class="form-input" value="17:00">
+            </div>
+
+            <div class="form-group" id="group-standard-days">
+                <label class="form-label">Dias de Funcionamento</label>
+                <div class="checkbox-group" id="post-days"></div>
+            </div>
+
+            <div class="form-group" id="group-hibrido-days" style="display: none;">
+                <label class="form-label">Escala Híbrida (Turno por Dia)</label>
+                <div class="hibrido-grid" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+
+            <button id="submit-new-post" class="btn-primary">✅ Salvar Posto</button>
+        </div>
+    </div>
+
+    <!-- ===== ADD/EDIT QRA MODAL ===== -->
+    <div id="qra-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close" data-close="qra-modal" aria-label="Fechar">✕</button>
+            <h2 id="qra-modal-title" class="modal-title">👤 Novo QRA</h2>
+            <input type="hidden" id="qra-id" value="">
+
+            <div class="form-group">
+                <label class="form-label" for="qra-name">Nome (QRA)</label>
+                <input type="text" id="qra-name" class="form-input" placeholder="Ex: João Silva">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="qra-post">Posto (QTH)</label>
+                <select id="qra-post" class="form-select"></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="qra-turno">Turno</label>
+                <select id="qra-turno" class="form-select">
+                    <option value="diurno">☀️ Diurno (Turno 1)</option>
+                    <option value="noturno">🌙 Noturno (Turno 2)</option>
+                    <option value="24h">🔄 24h (os dois turnos)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Dias em que trabalha</label>
+                <div class="checkbox-group" id="qra-days"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="qra-phone">Telefone (opcional)</label>
+                <input type="tel" id="qra-phone" class="form-input" placeholder="(11) 90000-0000">
+            </div>
+            <button id="save-qra" class="btn-primary">✅ Salvar QRA</button>
+        </div>
+    </div>
+
+    <!-- ===== FOLGA MODAL ===== -->
+    <div id="folga-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close" data-close="folga-modal" aria-label="Fechar">✕</button>
+            <h2 class="modal-title">🏖️ Alerta de Folga</h2>
+            <div class="form-group">
+                <label class="form-label" for="folga-qra">QRA</label>
+                <select id="folga-qra" class="form-select"></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="folga-date">Dia da folga</label>
+                <input type="date" id="folga-date" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="folga-note">Observação (opcional)</label>
+                <input type="text" id="folga-note" class="form-input" placeholder="Ex: consulta médica">
+            </div>
+            <div id="folga-info" class="info-box"></div>
+            <button id="save-folga" class="btn-primary">✅ Salvar Folga</button>
+        </div>
+    </div>
+
+    <!-- ===== COBERTURA MODAL ===== -->
+    <div id="cobertura-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close" data-close="cobertura-modal" aria-label="Fechar">✕</button>
+            <h2 class="modal-title">🔁 QRA de Cobertura</h2>
+            <div class="form-group">
+                <label class="form-label" for="cob-post">Posto (QTH) a cobrir</label>
+                <select id="cob-post" class="form-select"></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="cob-date">Dia</label>
+                <input type="date" id="cob-date" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="cob-turno">Turno</label>
+                <select id="cob-turno" class="form-select"></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="cob-qra">Quem vai cobrir</label>
+                <select id="cob-qra" class="form-select"></select>
+            </div>
+            <div class="form-group" id="cob-temp-group" style="display: none;">
+                <label class="form-label" for="cob-temp-name">Nome do QRA temporário</label>
+                <input type="text" id="cob-temp-name" class="form-input" placeholder="Ex: Carlos (extra)">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="cob-note">Observação (opcional)</label>
+                <input type="text" id="cob-note" class="form-input" placeholder="Ex: cobrindo folga do João">
+            </div>
+            <div id="cob-check" class="info-box"></div>
+            <button id="save-cobertura" class="btn-primary">✅ Salvar Cobertura</button>
+        </div>
+    </div>
+
+    <!-- ===== CONFIRM DIALOG ===== -->
+    <div id="confirm-overlay" class="modal-overlay">
+        <div class="confirm-box">
+            <p id="confirm-message" class="confirm-message">Tem certeza?</p>
+            <div class="confirm-actions">
+                <button id="confirm-no" class="btn-secondary">Cancelar</button>
+                <button id="confirm-yes" class="btn-danger">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== TOAST CONTAINER ===== -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- ===== FIREBASE SDK ===== -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+    <!-- ===== APP SCRIPT ===== -->
+    <script src="app.js"></script>
+
+</body>
+</html>
