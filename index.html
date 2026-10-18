@@ -83,6 +83,7 @@
     <div class="fab-container">
         <button id="config-btn" class="fab fab-config" data-tooltip="Configurações Firebase" aria-label="Configurações">⚙️</button>
         <button id="add-post-btn" class="fab fab-add" data-tooltip="Adicionar novo posto" aria-label="Adicionar posto">➕</button>
+        <button id="whatsapp-btn" class="fab fab-whatsapp" data-tooltip="Compartilhar via WhatsApp" aria-label="Compartilhar WhatsApp">📱</button>
     </div>
 
     <!-- ===== FIREBASE SETUP MODAL ===== -->
@@ -175,28 +176,19 @@
             <button class="modal-close" data-close="qra-modal" aria-label="Fechar">✕</button>
             <h2 id="qra-modal-title" class="modal-title">👤 Novo QRA</h2>
             <input type="hidden" id="qra-id" value="">
+            <input type="hidden" id="qra-post" value="">
+            <input type="hidden" id="qra-turno" value="">
+            <div id="qra-slot-info" class="slot-info"></div>
 
-            <div class="form-group">
+            <div class="form-group" id="qra-pick-group">
+                <label class="form-label" for="qra-pick">Quem vai ocupar a vaga</label>
+                <select id="qra-pick" class="form-select"></select>
+            </div>
+            <div class="form-group" id="qra-name-group">
                 <label class="form-label" for="qra-name">Nome (QRA)</label>
                 <input type="text" id="qra-name" class="form-input" placeholder="Ex: João Silva">
             </div>
-            <div class="form-group">
-                <label class="form-label" for="qra-post">Posto (QTH)</label>
-                <select id="qra-post" class="form-select"></select>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="qra-turno">Turno</label>
-                <select id="qra-turno" class="form-select">
-                    <option value="diurno">☀️ Diurno (Turno 1)</option>
-                    <option value="noturno">🌙 Noturno (Turno 2)</option>
-                    <option value="24h">🔄 24h (os dois turnos)</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Dias em que trabalha</label>
-                <div class="checkbox-group" id="qra-days"></div>
-            </div>
-            <div class="form-group">
+            <div class="form-group" id="qra-phone-group">
                 <label class="form-label" for="qra-phone">Telefone (opcional)</label>
                 <input type="tel" id="qra-phone" class="form-input" placeholder="(11) 90000-0000">
             </div>

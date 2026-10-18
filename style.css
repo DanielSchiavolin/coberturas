@@ -1447,3 +1447,88 @@ body {
 }
 
 .weekend-section .agenda-date { color: #E67E22; }
+
+/* --- Slot table (vagas): one QRA per vaga --- */
+.slot-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+}
+
+.slot-table td {
+  padding: 5px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  vertical-align: middle;
+}
+
+.slot-table tr:last-child td { border-bottom: none; }
+
+.slot-label {
+  width: 46%;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.slot-cell { line-height: 1.8; }
+.slot-cell > * { margin-right: 4px; vertical-align: middle; }
+
+.slot-name { font-weight: 700; cursor: pointer; }
+.slot-name:hover { color: var(--accent); }
+
+.slot-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(46, 204, 113, 0.2);
+  color: #58D68D;
+  text-transform: uppercase;
+}
+
+.slot-tag.off { background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); text-transform: none; }
+
+.slot-table tr.empty .slot-label { color: rgba(255, 255, 255, 0.45); }
+.slot-table tr.out .slot-label { color: #F8C471; }
+
+.slot-add {
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font: 600 0.72rem var(--font-main);
+  cursor: pointer;
+}
+
+.slot-add:hover { border-color: var(--accent); color: var(--accent); }
+
+.slot-info {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.slot-info:empty { display: none; }
+
+/* --- Coverage alert inside flashing cards --- */
+.cover-alert {
+  background: rgba(231, 76, 60, 0.3);
+  border: 1px solid #FF4444;
+  color: #FFF;
+  font-size: 0.78rem;
+  font-weight: 800;
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-bottom: 10px;
+  letter-spacing: 0.3px;
+}
+
+.cover-alert-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.cover-alert .link-btn { background: rgba(0, 0, 0, 0.35); font-size: 0.75rem; }
+
+.card-actions.single { grid-template-columns: 1fr; }

@@ -16,10 +16,20 @@ App separado do QTI Monitor (banco de dados próprio). Mesmos postos (QTHs) e me
 - **Tirar do posto**: o ✕ no nome do QRA (card do posto) ou "🚫 Tirar do posto" na lista. O QRA continua cadastrado como **reserva** e pode cobrir.
 - **Fim de semana dos postos híbridos**: a partir de segunda-feira, todo turno de sábado/domingo sem ninguém (sem titular presente e sem cobertura) fica alertando (borda laranja no posto, seção no topo de "Folgas & Coberturas", som a cada 2 h) até ser preenchido.
 
-## Turnos
+## Turnos e vagas
 Mesmo modelo do QTI: Turno 1 (☀️ Diurno) 00:00–16:59 · Turno 2 (🌙 Noturno) 17:00–23:59.
-- Postos **24h**: QRAs em **Diurno par**, **Diurno ímpar**, **Noturno par** ou **Noturno ímpar** (12x36 pelo dia do mês: par = dias 2, 4, 6…; ímpar = 1, 3, 5…).
-- Postos diurnos/noturnos: Diurno ou Noturno. Híbridos: todas as opções.
+Cada posto tem uma **tabela de vagas** e cada vaga aceita **um QRA só** (para trocar, tire o atual com ✕):
+- **24h**: Diurno par · Diurno ímpar · Noturno par · Noturno ímpar
+- **Noturno**: Noturno par · Noturno ímpar
+- **Híbrido**: Diurno seg–sex (se houver) · Diurno sábado · Diurno domingo · Noturno par · Noturno ímpar
+- **Diurno**: Diurno (todos os dias de funcionamento)
+
+Par/ímpar = 12x36 pelo dia do mês (par = 2, 4, 6…; ímpar = 1, 3, 5…).
+O "+ adicionar" da vaga já sabe o posto e o turno: basta escolher alguém da reserva ou digitar um nome novo.
+
+## Alertas
+- Card **pisca** (igual ao QTI) com "🚨 PRECISA DE COBERTURA" + data e turno sempre que houver folga sem cobertura nos próximos 7 dias ou turno de fim de semana vago em posto híbrido (a partir de segunda).
+- Botão 📱 exporta para o WhatsApp: 🟢 titular · 🟡 cobertura · 🔴 sem cobertura · ⚪ ninguém escalado, mais a lista do que precisa de cobertura.
 
 ## Configuração (uma vez)
 1. Criar um projeto novo no [Firebase Console](https://console.firebase.google.com) (ex.: `front-security-coberturas`).
