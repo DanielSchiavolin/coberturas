@@ -6,7 +6,7 @@ App separado do QTI Monitor (banco de dados próprio). Mesmos postos (QTHs) e me
 - **QRAs por posto**: cadastrar, editar e excluir pela própria tela (aba 👥 QRAs ou "👤 + QRA" no card do posto).
 - **Lista de QRAs**: busca por nome ou posto, mostrando o posto, o turno e o **próximo empenho** de cada um.
 - **Alerta de folga**: lançar "fulano de folga no dia tal". O posto passa a alertar (piscar + som, igual ao QTI) até alguém ser escalado para cobrir.
-- **QRA de cobertura**: escolher da lista ou digitar um nome temporário. O app avisa se houver:
+- **QRA de cobertura**: escolher a vaga do dia (ex.: "🌙 Noturno par — titular: João") e quem cobre — da lista, um nome temporário, ou **"⏳ Ainda não sei"** para só criar o alerta (o posto pisca até você usar "👤 Definir QRA"). O app avisa se houver:
   - ⛔ **choque**: a pessoa já está empenhada no mesmo turno (como titular ou em outra cobertura);
   - ⚠️ **dobra**: empenho no turno anterior ou no posterior;
   - ⚠️ posto que não opera nesse turno.
