@@ -512,11 +512,12 @@ class CoberturasApp {
     return true;
   }
 
-  // Coalesce bursts of listener events into one render
+  // Coalesce bursts of listener events into one render. setTimeout (not requestAnimationFrame):
+  // rAF is paused in background tabs, which would freeze the screen and the alarms.
   queueRender() {
     if (this.renderQueued) return;
     this.renderQueued = true;
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       this.renderQueued = false;
       if (!this.loaded.posts) return;
       this.weekendPending = this.sched.weekendPendingSlots();
@@ -1309,7 +1310,7 @@ class CoberturasApp {
     toast.className = `toast ${type}`;
     toast.textContent = message;
     container.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => toast.classList.add('show'), 10);
     setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 4000);
   }
 
