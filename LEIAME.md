@@ -13,9 +13,13 @@ App separado do QTI Monitor (banco de dados próprio). Mesmos postos (QTHs) e me
 - **Google Agenda**: botão 📅 em cada folga/cobertura abre o evento já preenchido.
 - **Tempo real**: se um atualiza, todos veem (Firebase Realtime Database).
 
+- **Tirar do posto**: o ✕ no nome do QRA (card do posto) ou "🚫 Tirar do posto" na lista. O QRA continua cadastrado como **reserva** e pode cobrir.
+- **Fim de semana dos postos híbridos**: a partir de segunda-feira, todo turno de sábado/domingo sem ninguém (sem titular presente e sem cobertura) fica alertando (borda laranja no posto, seção no topo de "Folgas & Coberturas", som a cada 2 h) até ser preenchido.
+
 ## Turnos
 Mesmo modelo do QTI: Turno 1 (☀️ Diurno) 00:00–16:59 · Turno 2 (🌙 Noturno) 17:00–23:59.
-Um QRA "24h" ocupa os dois turnos do dia.
+- Postos **24h**: QRAs em **Diurno par**, **Diurno ímpar**, **Noturno par** ou **Noturno ímpar** (12x36 pelo dia do mês: par = dias 2, 4, 6…; ímpar = 1, 3, 5…).
+- Postos diurnos/noturnos: Diurno ou Noturno. Híbridos: todas as opções.
 
 ## Configuração (uma vez)
 1. Criar um projeto novo no [Firebase Console](https://console.firebase.google.com) (ex.: `front-security-coberturas`).

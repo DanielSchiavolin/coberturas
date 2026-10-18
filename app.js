@@ -34,6 +34,24 @@ const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kall
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
 const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const SHIFT_LABEL = { diurno: '☀️ Diurno', noturno: '🌙 Noturno', '24h': '🔄 24h' };
+// QRA shifts. Par/ímpar = 12x36 by day of the month (even / odd days)
+const QRA_TURNOS = {
+  diurno: { label: '☀️ Diurno', short: '☀️', shifts: ['diurno'], parity: null },
+  noturno: { label: '🌙 Noturno', short: '🌙', shifts: ['noturno'], parity: null },
+  '24h': { label: '🔄 24h', short: '🔄', shifts: ['diurno', 'noturno'], parity: null },
+  diurno_par: { label: '☀️ Diurno par', short: '☀️P', shifts: ['diurno'], parity: 0 },
+  diurno_impar: { label: '☀️ Diurno ímpar', short: '☀️I', shifts: ['diurno'], parity: 1 },
+  noturno_par: { label: '🌙 Noturno par', short: '🌙P', shifts: ['noturno'], parity: 0 },
+  noturno_impar: { label: '🌙 Noturno ímpar', short: '🌙I', shifts: ['noturno'], parity: 1 },
+};
+// Shift options offered for a QRA according to the post's escala
+const TURNOS_BY_ESCALA = {
+  '24h': ['diurno_par', 'diurno_impar', 'noturno_par', 'noturno_impar'],
+  diurno: ['diurno'],
+  noturno: ['noturno'],
+  hibrido: ['noturno', 'diurno', '24h', 'diurno_par', 'diurno_impar', 'noturno_par', 'noturno_impar'],
+  '': ['diurno', 'noturno', '24h'],
+};
 const TURNO2_START = 17 * 60; // Turno 1 (diurno): 00:00–16:59 · Turno 2 (noturno): 17:00–23:59
 const ALERT_DAYS_AHEAD = 7;   // header badge / card warnings look this far ahead
 const AGENDA_DAYS_AHEAD = 30;
@@ -140,11 +158,20 @@ class Schedule {
     return shiftsOf(this.postShiftOn(post, date)).includes(shift);
   }
 
-  // Titular duty ignoring folgas: QRA's post operates in that shift, QRA's turno covers it, QRA works that weekday
+  qraShifts(qra) {
+    const t = qra && QRA_TURNOS[qra.turno];
+    return t ? t.shifts : [];
+  }
+
+  // Titular duty ignoring folgas: QRA has a post (reserves have none), the post operates in that
+  // shift, the QRA's turno covers it (incl. even/odd day for par/ímpar) and the QRA works that weekday
   qraScheduled(qra, date, shift) {
-    if (!qra || !shiftsOf(qra.turno).includes(shift)) return false;
+    if (!qra || !qra.postId || !this.qraShifts(qra).includes(shift)) return false;
+    const d = parseDate(date);
+    const parity = QRA_TURNOS[qra.turno].parity;
+    if (parity !== null && d.getDate() % 2 !== parity) return false;
     const days = Array.isArray(qra.days) ? qra.days : [0, 1, 2, 3, 4, 5, 6];
-    if (!days.includes(parseDate(date).getDay())) return false;
+    if (!days.includes(d.getDay())) return false;
     return this.postWorks(this.posts[qra.postId], date, shift);
   }
 
@@ -249,6 +276,31 @@ class Schedule {
         });
       });
     }
+    return list;
+  }
+
+  // Saturday and Sunday of the current week (weeks run Monday → Sunday)
+  weekendDates(today = todayStr()) {
+    const dow = parseDate(today).getDay();
+    const sat = addDays(today, dow === 0 ? -1 : 6 - dow);
+    return [sat, addDays(sat, 1)];
+  }
+
+  // From Monday on, every weekend shift of a hybrid post with nobody on duty
+  // (no present titular and no cobertura) stays pending until it is filled
+  weekendPendingSlots() {
+    const cur = currentSlot();
+    const list = [];
+    this.weekendDates(cur.date).forEach(date => {
+      if (date < cur.date) return;
+      Object.values(this.posts).filter(p => p.escalaType === 'hibrido').forEach(post => {
+        shiftsOf(this.postShiftOn(post, date)).forEach(shift => {
+          if (date === cur.date && cur.shift === 'noturno' && shift === 'diurno') return;
+          const st = this.slotStatus(post, date, shift);
+          if (st.presentes.length === 0 && st.coberturas.length === 0) list.push({ post, date, shift, status: st });
+        });
+      });
+    });
     return list;
   }
 
@@ -449,6 +501,7 @@ class CoberturasApp {
     requestAnimationFrame(() => {
       this.renderQueued = false;
       if (!this.loaded.posts) return;
+      this.weekendPending = this.sched.weekendPendingSlots();
       this.renderPosts();
       this.renderQraList();
       this.renderAgenda();
@@ -494,7 +547,7 @@ class CoberturasApp {
 
   postLabel(postId) {
     const p = this.sched.posts[postId];
-    return p ? `${p.name} · ${p.category}` : 'Sem posto';
+    return p ? `${p.name} · ${p.category}` : 'Sem posto (reserva)';
   }
 
   // ----- Postos -----
@@ -540,7 +593,9 @@ class CoberturasApp {
       st.ausentes.forEach(q => parts.push(`<span class="who off">🏖️ ${esc(q.name)}</span>`));
       st.coberturas.forEach(c => parts.push(`<span class="who cover">🔁 ${esc(c.qraName)}</span>`));
       if (st.descoberto > 0) parts.push('<span class="who alert">⚠️ SEM COBERTURA</span>');
-      if (st.titulares.length === 0 && st.coberturas.length === 0) parts.push('<span class="who muted">Nenhum QRA cadastrado</span>');
+      if (st.titulares.length === 0 && st.coberturas.length === 0) {
+        parts.push(`<span class="who muted">${qras.length ? 'Ninguém escalado' : 'Nenhum QRA cadastrado'}</span>`);
+      }
       return `<div class="shift-line${isPast ? ' past' : ''}"><span class="shift-tag">${SHIFT_LABEL[shift]}</span>${parts.join('')}</div>`;
     });
 
@@ -554,9 +609,16 @@ class CoberturasApp {
       });
     }
 
+    // Weekend shifts of hybrid posts still without anyone (alerted from Monday on)
+    const weekend = (this.weekendPending || []).filter(w => w.post.id === post.id);
+    const weekendHtml = weekend.length
+      ? `<div class="weekend-alert">📅 Fim de semana sem cobertura: ${weekend.map(w =>
+          `<button class="link-btn" onclick="app.showCoberturaModal({ postId: '${post.id}', date: '${w.date}', turno: '${w.shift}' })">${slotLabel(w.date, w.shift)}</button>`).join(' ')}</div>`
+      : '';
+
     const inactive = todayType === 'folga';
     return `
-      <div class="post-card${inactive ? ' inactive' : ''}${flashing ? ' flashing' : ''}" id="card-${post.id}">
+      <div class="post-card${inactive ? ' inactive' : ''}${flashing ? ' flashing' : ''}${weekend.length ? ' weekend-pending' : ''}" id="card-${post.id}">
         <button class="btn-edit-post" onclick="app.showPostModal('${post.id}')" title="Editar posto">✏️</button>
         <button class="btn-delete-post" onclick="app.confirmDeletePost('${post.id}')" title="Deletar posto">✕</button>
         <div class="post-header">
@@ -564,12 +626,17 @@ class CoberturasApp {
           <span class="post-type-badge ${post.escalaType} badge-${post.escalaType}">${badgeLabel}</span>
         </div>
         <div class="qra-chips">
-          ${qras.length ? qras.map(q => `<span class="qra-chip" onclick="app.showQraModal('${q.id}')" title="Editar QRA">${SHIFT_LABEL[q.turno] ? SHIFT_LABEL[q.turno].split(' ')[0] : ''} ${esc(q.name)}</span>`).join('') : '<span class="muted-text">Sem QRAs cadastrados</span>'}
+          ${qras.length ? qras.map(q => `
+            <span class="qra-chip" title="${esc((QRA_TURNOS[q.turno] || {}).label || '')}">
+              <span class="chip-name" onclick="app.showQraModal('${q.id}')">${(QRA_TURNOS[q.turno] || {}).short || ''} ${esc(q.name)}</span>
+              <button class="chip-x" onclick="app.confirmUnassignQra('${q.id}')" title="Tirar do posto (continua na lista de QRAs)">✕</button>
+            </span>`).join('') : '<span class="muted-text">Sem QRAs cadastrados</span>'}
         </div>
         <div class="shift-lines">
           ${inactive ? '<div class="shift-line"><span class="who muted">⛔ Posto não opera hoje</span></div>' : shiftLines.join('')}
         </div>
         ${upcoming.length ? `<div class="upcoming-alert">⚠️ Folga sem cobertura: ${upcoming.join(' · ')}</div>` : ''}
+        ${weekendHtml}
         <div class="card-actions">
           <button class="btn-mini" onclick="app.showQraModal(null, '${post.id}')">👤 + QRA</button>
           <button class="btn-mini btn-mini-cover" onclick="app.showCoberturaModal({ postId: '${post.id}' })">🔁 Cobertura</button>
@@ -607,15 +674,16 @@ class CoberturasApp {
         <div class="qra-row">
           <div class="qra-main">
             <div class="qra-name">${esc(q.name)} ${q.phone ? `<a class="qra-phone" href="tel:${esc(q.phone)}">📞 ${esc(q.phone)}</a>` : ''}</div>
-            <div class="qra-meta">🏢 ${esc(this.postLabel(q.postId))} · ${SHIFT_LABEL[q.turno] || ''} · ${days}</div>
+            <div class="qra-meta${q.postId ? '' : ' reserve'}">🏢 ${esc(this.postLabel(q.postId))}${q.postId ? ` · ${(QRA_TURNOS[q.turno] || {}).label || ''} · ${days}` : ''}</div>
             <div class="qra-next">➡️ Próximo empenho: ${nextText}</div>
             ${folgas.length ? `<div class="qra-folgas">🏖️ Folgas: ${folgas.slice(0, 4).map(f => dateLabel(f.date)).join(', ')}${folgas.length > 4 ? '…' : ''}</div>` : ''}
           </div>
           <div class="qra-actions">
             <button class="btn-mini" onclick="app.showFolgaModal('${q.id}')">🏖️ Folga</button>
             <button class="btn-mini btn-mini-cover" onclick="app.showCoberturaModal({ qraId: '${q.id}' })">🔁 Cobrir</button>
+            ${q.postId ? `<button class="btn-mini" onclick="app.confirmUnassignQra('${q.id}')" title="Tirar do posto (continua na lista)">🚫 Tirar do posto</button>` : ''}
             <button class="btn-icon" onclick="app.showQraModal('${q.id}')" title="Editar">✏️</button>
-            <button class="btn-icon danger" onclick="app.confirmDeleteQra('${q.id}')" title="Excluir">🗑️</button>
+            <button class="btn-icon danger" onclick="app.confirmDeleteQra('${q.id}')" title="Excluir de vez">🗑️</button>
           </div>
         </div>
       `;
@@ -632,20 +700,38 @@ class CoberturasApp {
     const cobs = Object.values(s.coberturas).filter(c => c.date >= today && c.date <= end);
     const dates = [...new Set([...folgas.map(f => f.date), ...cobs.map(c => c.date)])].sort();
 
-    document.getElementById('agenda-count').textContent = (folgas.length + cobs.length) || '';
+    const weekend = this.weekendPending || [];
+    document.getElementById('agenda-count').textContent = (folgas.length + cobs.length + weekend.length) || '';
     const list = document.getElementById('agenda-list');
+
+    const weekendHtml = weekend.length ? `
+      <div class="agenda-day weekend-section">
+        <h3 class="agenda-date">📅 Fim de semana — coberturas pendentes <span>postos híbridos</span></h3>
+        ${weekend.map(w => `
+          <div class="agenda-item uncovered">
+            <div class="agenda-main">
+              <div class="agenda-title"><strong>${esc(w.post.name)}</strong> · ${esc(w.post.category)}</div>
+              <div class="agenda-status"><span class="who alert">${slotLabel(w.date, w.shift)}: SEM COBERTURA</span>
+                ${w.status.ausentes.map(q => `<span class="who off">🏖️ ${esc(q.name)}</span>`).join('')}</div>
+            </div>
+            <div class="agenda-actions">
+              <button class="btn-mini btn-mini-cover" onclick="app.showCoberturaModal({ postId: '${w.post.id}', date: '${w.date}', turno: '${w.shift}' })">🔁 Cobrir</button>
+            </div>
+          </div>`).join('')}
+      </div>` : '';
+
     if (dates.length === 0) {
-      list.innerHTML = '<div class="empty-state">Nenhuma folga ou cobertura nos próximos 30 dias.</div>';
+      list.innerHTML = weekendHtml || '<div class="empty-state">Nenhuma folga ou cobertura nos próximos 30 dias.</div>';
       return;
     }
 
-    list.innerHTML = dates.map(date => {
+    list.innerHTML = weekendHtml + dates.map(date => {
       const dayFolgas = folgas.filter(f => f.date === date);
       const dayCobs = cobs.filter(c => c.date === date);
       const folgaHtml = dayFolgas.map(f => {
         const q = s.qras[f.qraId];
         const post = q ? s.posts[q.postId] : null;
-        const shifts = q ? shiftsOf(q.turno).filter(sh => s.qraScheduled(q, date, sh)) : [];
+        const shifts = q ? s.qraShifts(q).filter(sh => s.qraScheduled(q, date, sh)) : [];
         const statusHtml = shifts.length === 0
           ? '<span class="who muted">Não teria empenho neste dia</span>'
           : shifts.map(sh => {
@@ -694,11 +780,15 @@ class CoberturasApp {
 
   updateAlerts() {
     const uncovered = this.sched.uncoveredSlots(ALERT_DAYS_AHEAD);
+    const weekend = this.weekendPending || [];
+    // Same slot may be both an uncovered folga and a weekend pending: count it once
+    const all = new Map();
+    [...uncovered, ...weekend].forEach(u => all.set(`${u.post.id}|${u.date}|${u.shift}`, u));
     const badge = document.getElementById('pending-count');
-    if (uncovered.length > 0) {
-      badge.textContent = `⚠️ ${uncovered.length} sem cobertura`;
+    if (all.size > 0) {
+      badge.textContent = `⚠️ ${all.size} sem cobertura`;
       badge.className = 'pending-badge';
-      badge.title = uncovered.map(u => `${slotLabel(u.date, u.shift)} · ${u.post.name}`).join('\n');
+      badge.title = [...all.values()].map(u => `${slotLabel(u.date, u.shift)} · ${u.post.name}`).join('\n');
     } else {
       badge.textContent = '✓ Tudo coberto';
       badge.className = 'pending-badge all-clear';
@@ -714,6 +804,17 @@ class CoberturasApp {
       this.showToast('🚨 Posto sem cobertura no turno atual!', 'error');
     }
     this.lastAlarmKeys = nowKeys;
+
+    // Weekend reminder (from Monday on): sound + toast at most every 2 hours per device, until filled
+    if (weekend.length > 0) {
+      let last = 0;
+      try { last = Number(localStorage.getItem('coberturasWeekendAlertAt')) || 0; } catch (e) {}
+      if (Date.now() - last > 2 * 60 * 60 * 1000) {
+        try { localStorage.setItem('coberturasWeekendAlertAt', String(Date.now())); } catch (e) {}
+        this.sound.alarm();
+        this.showToast(`📅 ${weekend.length} cobertura(s) de fim de semana pendente(s) nos postos híbridos`, 'error');
+      }
+    }
   }
 
   // ===== QRA modal =====
@@ -731,15 +832,33 @@ class CoberturasApp {
     document.getElementById('qra-id').value = q ? q.id : '';
     document.getElementById('qra-name').value = q ? q.name : '';
     document.getElementById('qra-phone').value = q ? (q.phone || '') : '';
-    const postId = q ? q.postId : (presetPostId || '');
-    this.fillPostSelect('qra-post', postId, '— selecione o posto —');
-    const post = this.sched.posts[postId];
-    const defaultTurno = post && (post.escalaType === 'diurno' || post.escalaType === 'noturno') ? post.escalaType : 'diurno';
-    document.getElementById('qra-turno').value = q ? q.turno : defaultTurno;
+    const postId = q ? (q.postId || '') : (presetPostId || '');
+    this.fillPostSelect('qra-post', postId, '— Sem posto (reserva) —');
+    this.refreshQraTurnoOptions(q ? q.turno : null);
     const days = q && Array.isArray(q.days) ? q.days : [0, 1, 2, 3, 4, 5, 6];
     document.querySelectorAll('.qra-day-cb').forEach(cb => { cb.checked = days.includes(Number(cb.value)); });
     this.showModal('qra-modal');
     setTimeout(() => document.getElementById('qra-name').focus(), 50);
+  }
+
+  // 24h posts use the 12x36 par/ímpar model; other escalas keep their own shift
+  refreshQraTurnoOptions(preferred) {
+    const select = document.getElementById('qra-turno');
+    const post = this.sched.posts[document.getElementById('qra-post').value];
+    const options = [...(TURNOS_BY_ESCALA[post ? post.escalaType : ''] || TURNOS_BY_ESCALA[''])];
+    // A saved value is always kept (even if unusual for the post); a value picked for another post is not
+    if (preferred && QRA_TURNOS[preferred] && !options.includes(preferred)) options.push(preferred);
+    const keep = preferred || select.value;
+    select.innerHTML = options.map(t => `<option value="${t}">${QRA_TURNOS[t].label}</option>`).join('');
+    select.value = options.includes(keep) ? keep : options[0];
+  }
+
+  confirmUnassignQra(qraId) {
+    const q = this.sched.qras[qraId];
+    if (!q || !q.postId) return;
+    const post = this.sched.posts[q.postId];
+    this.confirm(`Tirar ${q.name} do posto ${post ? post.name : ''}? Ele continua na lista geral de QRAs como reserva e pode ser usado em coberturas.`, () =>
+      this.write(this.firebase.update(`qras/${qraId}`, { postId: '' }), `${q.name} saiu do posto e ficou na reserva`));
   }
 
   async saveQra() {
@@ -749,7 +868,6 @@ class CoberturasApp {
     const phone = document.getElementById('qra-phone').value.trim();
     const days = [...document.querySelectorAll('.qra-day-cb:checked')].map(cb => Number(cb.value));
     if (!name) return this.showToast('Informe o nome do QRA', 'error');
-    if (!postId) return this.showToast('Selecione o posto do QRA', 'error');
     if (days.length === 0) return this.showToast('Selecione pelo menos um dia de trabalho', 'error');
 
     const existingId = document.getElementById('qra-id').value;
@@ -797,7 +915,7 @@ class CoberturasApp {
     const q = this.sched.qras[document.getElementById('folga-qra').value];
     const date = document.getElementById('folga-date').value;
     if (!q || !date) { box.innerHTML = ''; box.className = 'info-box'; return; }
-    const shifts = shiftsOf(q.turno).filter(sh => this.sched.qraScheduled(q, date, sh));
+    const shifts = this.sched.qraShifts(q).filter(sh => this.sched.qraScheduled(q, date, sh));
     const lines = [];
     if (this.sched.folgaOf(q.id, date)) lines.push(['warn', `${q.name} já tem folga lançada em ${dateLabel(date)}.`]);
     if (shifts.length === 0) {
@@ -1095,6 +1213,7 @@ class CoberturasApp {
 
     on('add-qra-btn', 'click', () => this.showQraModal(null));
     on('save-qra', 'click', () => this.saveQra());
+    on('qra-post', 'change', () => this.refreshQraTurnoOptions());
     on('qra-search', 'input', () => this.renderQraList());
 
     on('add-folga-btn', 'click', () => this.showFolgaModal(null));

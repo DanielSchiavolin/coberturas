@@ -1384,3 +1384,66 @@ body {
   .who { font-size: 0.72rem; padding: 2px 6px; }
   .btn-mini { font-size: 0.72rem; padding: 6px 6px; }
 }
+
+/* --- QRA chips with "remove from post" --- */
+.qra-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 3px;
+}
+
+.chip-name { cursor: pointer; }
+
+.chip-x {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.7rem;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.chip-x:hover { background: rgba(231, 76, 60, 0.3); color: #FFF; }
+
+.qra-meta.reserve { color: #C39BD3; }
+
+/* --- Weekend pending (hybrid posts, from Monday on) --- */
+.weekend-alert {
+  font-size: 0.75rem;
+  color: #FFB27A;
+  background: rgba(230, 126, 34, 0.15);
+  border: 1px solid rgba(230, 126, 34, 0.45);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.link-btn {
+  background: rgba(230, 126, 34, 0.25);
+  border: none;
+  color: #FFF;
+  font: 600 0.72rem var(--font-main);
+  border-radius: 6px;
+  padding: 2px 6px;
+  margin: 2px 2px 0 0;
+  cursor: pointer;
+}
+
+.link-btn:hover { background: rgba(230, 126, 34, 0.5); }
+
+@keyframes weekend-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0.0); border-color: rgba(230, 126, 34, 0.5); }
+  50% { box-shadow: 0 0 18px 2px rgba(230, 126, 34, 0.45); border-color: #E67E22; }
+}
+
+.post-card.weekend-pending:not(.flashing) {
+  border: 1px solid #E67E22;
+  animation: weekend-pulse 2s ease-in-out infinite;
+}
+
+.weekend-section .agenda-date { color: #E67E22; }
