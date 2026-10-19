@@ -714,16 +714,23 @@ class CoberturasApp {
 
   renderPosts() {
     const container = document.getElementById('posts-container');
-    const groups = this.postsByCategory();
+    let groups = this.postsByCategory();
     if (groups.length === 0) {
       container.innerHTML = '<div class="empty-state">Nenhum posto cadastrado.</div>';
       return;
     }
+    // Posts with any alert go first, in their own section (earliest pending first)
+    const firstPending = p => { const l = this.postPendings(p); return l.length ? l[0].date + l[0].shift : null; };
+    const alerted = groups.flatMap(([, posts]) => posts).filter(p => firstPending(p))
+      .sort((a, b) => firstPending(a).localeCompare(firstPending(b)) || a.name.localeCompare(b.name));
+    const alertedIds = new Set(alerted.map(p => p.id));
+    groups = groups.map(([cat, posts]) => [cat, posts.filter(p => !alertedIds.has(p.id))]).filter(([, posts]) => posts.length);
+    if (alerted.length) groups.unshift(['🚨 Com alerta', alerted]);
     container.innerHTML = groups.map(([cat, posts]) => `
       <div class="category-section">
         <div class="category-header">
-          <div class="category-icon">${CATEGORY_ICONS[cat] || '📌'}</div>
-          <h2 class="category-title">${esc(cat)}</h2>
+          <div class="category-icon">${cat.startsWith('🚨') ? '🚨' : (CATEGORY_ICONS[cat] || '📌')}</div>
+          <h2 class="category-title">${esc(cat.replace('🚨 ', ''))}</h2>
           <span class="category-count">${posts.length} postos</span>
         </div>
         <div class="posts-grid">${posts.map(p => this.postCardHtml(p)).join('')}</div>
