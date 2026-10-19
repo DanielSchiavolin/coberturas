@@ -37,7 +37,7 @@ const SHIFT_LABEL = { diurno: '☀️ Diurno', noturno: '🌙 Noturno', '24h': '
 // QRA slots (vagas). Each post has a fixed set of slots and each slot holds ONE QRA.
 // parity: 12x36 by day of the month (0 = even days, 1 = odd days) · dows: weekdays the slot works
 const QRA_TURNOS = {
-  diurno: { label: '☀️ Diurno', short: '☀️', shifts: ['diurno'], parity: null },
+  diurno: { label: '☀️ Diurno todo dia', short: '☀️', shifts: ['diurno'], parity: null },
   diurno_par: { label: '☀️ Diurno par', short: '☀️P', shifts: ['diurno'], parity: 0 },
   diurno_impar: { label: '☀️ Diurno ímpar', short: '☀️I', shifts: ['diurno'], parity: 1 },
   diurno_semana: { label: '☀️ Diurno seg–sex', short: '☀️S', shifts: ['diurno'], parity: null, dows: [1, 2, 3, 4, 5] },
@@ -233,7 +233,7 @@ class Schedule {
     if (!post) return [];
     if (post.escalaType === '24h') return ['diurno_par', 'diurno_impar', 'noturno_par', 'noturno_impar'];
     if (post.escalaType === 'noturno') return ['noturno_par', 'noturno_impar'];
-    if (post.escalaType === 'diurno') return ['diurno'];
+    if (post.escalaType === 'diurno') return ['diurno', 'diurno_par', 'diurno_impar'];
     const sched = post.hibridoSchedule || [];
     const hasDay = dow => sched[dow] === 'diurno' || sched[dow] === '24h';
     const slots = [];
