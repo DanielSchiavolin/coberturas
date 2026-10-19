@@ -861,11 +861,11 @@ class CoberturasApp {
     const all = new Map(this.allPendings().map(u => [`${u.post.id}|${u.date}|${u.shift}`, u]));
     const badge = document.getElementById('pending-count');
     if (all.size > 0) {
-      badge.textContent = `⚠️ ${all.size} sem cobertura`;
+      badge.innerHTML = `⚠️ ${all.size}<span class="badge-long"> sem cobertura</span>`;
       badge.className = 'pending-badge';
       badge.title = [...all.values()].map(u => `${slotLabel(u.date, u.shift)} · ${u.post.name}`).join('\n');
     } else {
-      badge.textContent = '✓ Tudo coberto';
+      badge.innerHTML = '✓<span class="badge-long"> Tudo coberto</span>';
       badge.className = 'pending-badge all-clear';
       badge.title = '';
     }
