@@ -325,6 +325,12 @@ class Schedule {
   }
 
   // person = { qraId?, name }. Returns the duties of that person in the slot.
+  // Cobertura (by someone else) already placed on a QRA's own vaga at that date/shift
+  releaseCover(qra, vaga, date, shift, excludeCobId) {
+    return Object.values(this.coberturas).find(c => !c.pending && c.id !== excludeCobId && c.postId === vaga.postId
+      && c.date === date && shiftsOf(c.turno).includes(shift) && c.qraId !== qra.id) || null;
+  }
+
   empenhosAt(person, date, shift, excludeCobId) {
     const result = [];
     const qra = person.qraId ? this.qras[person.qraId] : this.qraByName(person.name);
@@ -332,7 +338,10 @@ class Schedule {
     const name = normalizeText(qra ? qra.name : person.name);
 
     if (qra && !this.folgaOf(qra.id, date)) {
-      this.qraVagasOn(qra, date, shift).forEach(v => result.push({ kind: 'fixo', postId: v.postId, date, shift }));
+      // His own shift already covered by someone else = he is released from it, not a clash
+      this.qraVagasOn(qra, date, shift).forEach(v => {
+        if (!this.releaseCover(qra, v, date, shift, excludeCobId)) result.push({ kind: 'fixo', postId: v.postId, date, shift });
+      });
     }
     Object.values(this.coberturas).forEach(c => {
       if (c.pending || c.id === excludeCobId || c.date !== date || !shiftsOf(c.turno).includes(shift)) return;
@@ -382,6 +391,14 @@ class Schedule {
     });
 
     const qra = person.qraId ? this.qras[person.qraId] : this.qraByName(person.name);
+    if (qra) {
+      shifts.forEach(s => this.qraVagasOn(qra, date, s).forEach(v => {
+        const cov = this.releaseCover(qra, v, date, s, excludeCobId);
+        const p = this.posts[v.postId];
+        if (cov) out.infos.push(`O plantão dele (${p ? p.name : '?'} ${slotLabel(date, s)}) já está coberto por ${cov.qraName || 'alguém'} — está liberado.`);
+        else if (!this.folgaOf(qra.id, date)) out.infos.push(`Para liberar, primeiro lance uma cobertura no plantão dele: ${p ? p.name : '?'} ${slotLabel(date, s)}.`);
+      }));
+    }
     if (qra && this.folgaOf(qra.id, date)) {
       out.infos.push(`${qra.name} está de folga neste dia (por isso está livre no posto dele).`);
     }
