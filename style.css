@@ -1705,3 +1705,39 @@ body {
 }
 
 .qra-meta .chip-x { margin-left: 4px; vertical-align: middle; }
+
+/* --- Phone: two QTHs side by side (compact cards) --- */
+@media (max-width: 700px) {
+  .main-content { padding-left: 8px; padding-right: 8px; }
+  .view-tabs { margin-left: -8px; margin-right: -8px; padding-left: 8px; padding-right: 8px; }
+  .posts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .post-card { padding: 10px 8px 8px; border-radius: 12px; }
+  .post-header { padding-right: 40px; margin-bottom: 4px; gap: 3px; }
+  .post-name { font-size: 0.86rem; line-height: 1.15; word-break: break-word; }
+  .post-type-badge { font-size: 0.56rem; padding: 2px 6px; }
+  .btn-edit-post, .btn-delete-post { top: 6px; width: 22px; height: 22px; font-size: 0.7rem; }
+  .btn-delete-post { right: 4px; }
+  .btn-edit-post { right: 24px; }
+  .post-hours { font-size: 0.6rem; margin: 0 0 6px; }
+
+  /* slot table stacked: label on top, holder/button below */
+  .slot-table { font-size: 0.74rem; margin-bottom: 6px; }
+  .slot-table tr { display: block; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .slot-table tr:last-child { border-bottom: none; }
+  .slot-table td { display: block; padding: 1px 0; border: none; width: auto; text-align: left; }
+  .slot-label { font-size: 0.66rem; white-space: normal; }
+  .slot-cell { line-height: 1.5; }
+  .slot-add { padding: 3px 8px; font-size: 0.68rem; width: 100%; }
+  .slot-tag { font-size: 0.52rem; padding: 0 4px; }
+  .chip-x { width: 20px; height: 20px; font-size: 0.65rem; }
+
+  .cover-alert { font-size: 0.64rem; padding: 6px; }
+  .cover-alert .link-btn { font-size: 0.62rem; padding: 3px 5px; }
+  .cover-alert-legend { font-size: 0.56rem; }
+
+  .shift-lines { gap: 4px; margin-bottom: 6px; }
+  .shift-line { padding: 4px 6px; }
+  .shift-tag { font-size: 0.62rem; }
+  .who { font-size: 0.62rem; padding: 1px 5px; }
+  .btn-mini { font-size: 0.7rem; padding: 7px 4px; }
+}
