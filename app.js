@@ -56,6 +56,8 @@ const DAY_START = 7 * 60;
 const NIGHT_START = 19 * 60;
 const HYBRID_WEEKDAY_NIGHT_START = 17 * 60;
 const DEFAULT_ALERT = { diurno: '05:00', noturno: '17:00' };
+// Weekend vagas of hybrid posts are not fixed: they are filled week by week and free up every Monday
+const WEEKLY_TURNOS = ['diurno_sabado', 'diurno_domingo'];
 const ALERT_DAYS_AHEAD = 7;   // header badge / card warnings look this far ahead
 const AGENDA_DAYS_AHEAD = 30;
 
@@ -74,6 +76,12 @@ function addDays(str, n) {
   const d = parseDate(str);
   d.setDate(d.getDate() + n);
   return toDateStr(d);
+}
+
+// Monday of the week (Mon→Sun) containing the date
+function weekStart(date) {
+  const dow = parseDate(date).getDay();
+  return addDays(date, dow === 0 ? -6 : 1 - dow);
 }
 
 // Operational date: before 07:00 we are still in the previous date's night shift
@@ -240,9 +248,11 @@ class Schedule {
   qraVagas(qra) {
     if (!qra) return [];
     const vagas = [];
-    if (qra.postId && qra.turno) vagas.push({ postId: qra.postId, turno: qra.turno });
-    (Array.isArray(qra.extra) ? qra.extra : []).forEach(v => { if (v && v.postId && v.turno) vagas.push({ postId: v.postId, turno: v.turno }); });
-    return vagas;
+    if (qra.postId && qra.turno) vagas.push({ postId: qra.postId, turno: qra.turno, weekOf: qra.weekOf || '' });
+    (Array.isArray(qra.extra) ? qra.extra : []).forEach(v => { if (v && v.postId && v.turno) vagas.push({ postId: v.postId, turno: v.turno, weekOf: v.weekOf || '' }); });
+    // weekly vagas only count in the week they were filled
+    const week = weekStart(todayStr());
+    return vagas.filter(v => !WEEKLY_TURNOS.includes(v.turno) || v.weekOf === week);
   }
 
   isDupla(qra) {
@@ -780,7 +790,8 @@ class CoberturasApp {
            ${offToday ? '<span class="slot-tag off">🏖️ folga hoje</span>' : (onDutyToday ? '<span class="slot-tag today">hoje</span>' : '')}
            <button class="chip-x" onclick="app.confirmUnassignQra('${holder.id}', '${post.id}', '${turno}')" title="Tirar desta vaga (continua na lista de QRAs)">✕</button>`
         : `<button class="slot-add" onclick="app.showAssignModal('${post.id}', '${turno}')">+ adicionar</button>`;
-      return `<tr class="${holder ? '' : 'empty'}${outOfScale ? ' out' : ''}${dupla ? ' is-dupla' : ''}"><td class="slot-label">${outOfScale ? '⚠️ ' : ''}${def.label}</td><td class="slot-cell">${cell}</td></tr>`;
+      const weekly = WEEKLY_TURNOS.includes(turno) ? ' <small class="weekly-tag">· semanal</small>' : '';
+      return `<tr class="${holder ? '' : 'empty'}${outOfScale ? ' out' : ''}${dupla ? ' is-dupla' : ''}"><td class="slot-label">${outOfScale ? '⚠️ ' : ''}${def.label}${weekly}</td><td class="slot-cell">${cell}</td></tr>`;
     }).join('');
 
     // Today's shifts with who is on duty
@@ -1104,7 +1115,7 @@ class CoberturasApp {
       ? `Tirar ${q.name} da vaga ${this.vagaLabel(target)}? Ele continua em ${rest.map(v => this.vagaLabel(v)).join(' + ')}.`
       : `Tirar ${q.name} da vaga ${this.vagaLabel(target)}? Ele continua na lista geral de QRAs como reserva e pode ser usado em coberturas.`;
     const main = rest[0] || { postId: '', turno: '' };
-    const update = { postId: main.postId, turno: main.turno, extra: rest.slice(1) };
+    const update = { postId: main.postId, turno: main.turno, weekOf: main.weekOf || '', extra: rest.slice(1) };
     this.confirm(msg, () => this.write(this.firebase.update(`qras/${qraId}`, update),
       rest.length ? `${q.name} saiu de ${this.vagaLabel(target)}` : `${q.name} saiu do posto e ficou na reserva`));
   }
@@ -1156,10 +1167,10 @@ class CoberturasApp {
       if (pick !== '__new__') {
         const q = this.sched.qras[pick];
         const vagas = this.sched.qraVagas(q);
-        const vaga = { postId, turno };
+        const vaga = { postId, turno, weekOf: WEEKLY_TURNOS.includes(turno) ? weekStart(todayStr()) : '' };
         if (vagas.length === 0) {
           this.hideModal('qra-modal');
-          return this.write(this.firebase.update(`qras/${pick}`, { postId, turno, extra: [] }), `${q.name} na vaga ${label}`);
+          return this.write(this.firebase.update(`qras/${pick}`, { postId, turno, weekOf: vaga.weekOf, extra: [] }), `${q.name} na vaga ${label}`);
         }
         return this.confirmDupla(q, vaga, () => {
           this.hideModal('qra-modal');
@@ -1169,7 +1180,8 @@ class CoberturasApp {
       }
       const id = makeId(name);
       this.hideModal('qra-modal');
-      return this.write(this.firebase.set(`qras/${id}`, { id, name, postId, turno, days: allDays, phone }), `${name} na vaga ${label}`);
+      const weekOf = WEEKLY_TURNOS.includes(turno) ? weekStart(todayStr()) : '';
+      return this.write(this.firebase.set(`qras/${id}`, { id, name, postId, turno, weekOf, days: allDays, phone }), `${name} na vaga ${label}${weekOf ? ' (só esta semana)' : ''}`);
     }
 
     // New reserve QRA (QRAs tab)
@@ -1517,12 +1529,24 @@ class CoberturasApp {
       if (blocks.length) msg += `${CATEGORY_ICONS[cat] || '📌'} *${cat.toUpperCase()}*\n${blocks.join('\n')}\n\n`;
     });
 
-    const future = this.allPendings().filter(u => u.date > today);
-    if (future.length) {
-      msg += `${line}\n🚨 *PRECISAM DE COBERTURA*\n`;
-      future.forEach(u => { msg += `  🔴 ${slotLabel(u.date, u.shift)} — ${u.post.name}${u.cob ? ' (QRA a definir)' : ''}\n`; });
-      msg += '\n';
-    }
+    // Pending coverage: everything still open, today included
+    const reasonTxt = { pedido: 'QRA a definir', folga: 'folga sem cobertura', fds: 'fim de semana vago' };
+    const pend = this.allPendings();
+    msg += `${line}\n🚨 *COBERTURAS PENDENTES* (${pend.length})\n`;
+    msg += pend.length
+      ? pend.map(u => `  🔴 ${slotLabel(u.date, u.shift)} — ${u.post.name} (${reasonTxt[u.kind] || 'sem cobertura'})`).join('\n')
+      : '  ✅ Nenhuma';
+    msg += '\n\n';
+
+    // Coverage already scheduled with a QRA, from the current shift on
+    const programadas = Object.values(s.coberturas)
+      .filter(c => !c.pending && s.posts[c.postId] && !slotEnded(s.posts[c.postId], c.date, shiftsOf(c.turno).slice(-1)[0] || 'diurno'))
+      .sort((a, b) => (a.date + a.turno).localeCompare(b.date + b.turno));
+    msg += `🟡 *COBERTURAS PROGRAMADAS* (${programadas.length})\n`;
+    msg += programadas.length
+      ? programadas.map(c => `  🟡 ${slotLabel(c.date, shiftsOf(c.turno)[0])}${c.turno === '24h' ? ' + noturno' : ''} — ${s.posts[c.postId].name}: ${c.qraName}${c.qraId ? '' : ' (temporário)'}`).join('\n')
+      : '  Nenhuma';
+    msg += '\n\n';
 
     msg += `${line}\n📊 *RESUMO DE HOJE:*\n🟢 Titular: ${totals.ok} | 🟡 Cobertura: ${totals.cover}\n🔴 Sem cobertura: ${totals.missing} | ⚪ Ninguém escalado: ${totals.empty}`;
     return msg;
