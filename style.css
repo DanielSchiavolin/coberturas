@@ -1742,3 +1742,12 @@ body {
   .btn-mini { font-size: 0.7rem; padding: 7px 4px; }
 }
 .weekly-tag { color: #F8C471; font-weight: 600; }
+
+/* Name of who covers today blinks (only that chip, not the card) */
+@keyframes cover-blink {
+  0%, 100% { background: rgba(52, 152, 219, 0.18); color: #5DADE2; box-shadow: none; }
+  50% { background: #3498DB; color: #FFF; box-shadow: 0 0 10px rgba(52, 152, 219, 0.8); }
+}
+.who.cover.blink { animation: cover-blink 1s ease-in-out infinite; }
+
+#view-postos .toolbar .form-input, #view-agenda .toolbar .form-input { flex: 1 1 100%; margin: 0; }

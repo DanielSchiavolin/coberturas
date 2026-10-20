@@ -687,6 +687,7 @@ class CoberturasApp {
       this.renderPosts();
       this.renderQraList();
       this.renderAgenda();
+      this.applyAgendaFilter();
       this.updateAlerts();
     });
   }
@@ -742,6 +743,17 @@ class CoberturasApp {
   renderPosts() {
     const container = document.getElementById('posts-container');
     let groups = this.postsByCategory();
+    const query = normalizeText((document.getElementById('post-search') || {}).value);
+    if (query) {
+      const s = this.sched;
+      const text = p => normalizeText([p.name, p.category,
+        ...Object.values(s.qras).filter(q => s.qraVagas(q).some(v => v.postId === p.id)).map(q => q.name)].join(' '));
+      groups = groups.map(([cat, posts]) => [cat, posts.filter(p => text(p).includes(query))]).filter(([, posts]) => posts.length);
+      if (groups.length === 0) {
+        container.innerHTML = '<div class="empty-state">Nenhum posto encontrado.</div>';
+        return;
+      }
+    }
     if (groups.length === 0) {
       container.innerHTML = '<div class="empty-state">Nenhum posto cadastrado.</div>';
       return;
@@ -820,7 +832,7 @@ class CoberturasApp {
       const parts = [];
       st.presentes.forEach(q => parts.push(`<span class="who ok">${esc(q.name)}</span>`));
       st.ausentes.forEach(q => parts.push(`<span class="who off">🏖️ ${esc(q.name)}</span>`));
-      st.coberturas.forEach(c => parts.push(`<span class="who cover">🔁 ${esc(c.qraName)}</span>`));
+      st.coberturas.forEach(c => parts.push(`<span class="who cover${isPast ? '' : ' blink'}">🔁 ${esc(c.qraName)}</span>`));
       st.pedidos.forEach(() => parts.push('<span class="who alert">⏳ cobertura a definir</span>'));
       if (st.descoberto > 0) parts.push('<span class="who alert">⚠️ SEM COBERTURA</span>');
       if (st.titulares.length === 0 && st.coberturas.length === 0) parts.push('<span class="who muted">Ninguém escalado</span>');
@@ -1018,6 +1030,21 @@ class CoberturasApp {
       }).join('');
       return `<div class="agenda-day"><h3 class="agenda-date">${dateLabel(date)} <span>${date.split('-').reverse().join('/')}</span></h3>${folgaHtml}${cobHtml}</div>`;
     }).join('');
+  }
+
+  applyAgendaFilter() {
+    const query = normalizeText((document.getElementById('agenda-search') || {}).value);
+    const list = document.getElementById('agenda-list');
+    list.querySelectorAll('.agenda-day').forEach(day => {
+      const dayText = normalizeText(day.querySelector('.agenda-date').textContent);
+      let visible = 0;
+      day.querySelectorAll('.agenda-item').forEach(item => {
+        const show = !query || dayText.includes(query) || normalizeText(item.textContent).includes(query);
+        item.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      day.style.display = visible ? '' : 'none';
+    });
   }
 
   // ----- Alerts (header badge + alarm like the QTI app) -----
@@ -1517,55 +1544,29 @@ class CoberturasApp {
 
   // ===== WhatsApp export (same style as the QTI app) =====
 
+  // Report: only coberturas still to resolve and coberturas already scheduled
   buildWhatsAppMessage() {
     const s = this.sched;
     const now = new Date();
-    const today = todayStr();
     const line = '━━━━━━━━━━━━━━━━━━━━━';
     let msg = `🛡️ *FRONT SECURITY - Coberturas*\n📅 ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}\n${line}\n\n`;
-    const totals = { ok: 0, cover: 0, missing: 0, empty: 0 };
 
-    this.postsByCategory().forEach(([cat, posts]) => {
-      const blocks = posts.map(post => {
-        const shifts = shiftsOf(s.postShiftOn(post, today));
-        if (shifts.length === 0) return '';
-        const rows = shifts.map(shift => {
-          const st = s.slotStatus(post, today, shift);
-          const label = SHIFT_LABEL[shift].split(' ')[1];
-          const names = [...st.presentes.map(q => q.name), ...st.coberturas.map(c => `${c.qraName} (cobertura)`)].join(', ');
-          const off = st.ausentes.length ? ` — folga: ${st.ausentes.map(q => q.name).join(', ')}` : '';
-          if (st.descoberto > 0) { totals.missing++; return `  🔴 ${label}: SEM COBERTURA${off}`; }
-          if (st.pedidos.length && !st.presentes.length && !st.coberturas.length) { totals.missing++; return `  🔴 ${label}: cobertura A DEFINIR`; }
-          if (st.presentes.length === 0 && st.coberturas.length === 0) { totals.empty++; return `  ⚪ ${label}: ninguém escalado`; }
-          if (st.coberturas.length > 0) { totals.cover++; return `  🟡 ${label}: ${names}${off}`; }
-          totals.ok++;
-          return `  🟢 ${label}: ${names}`;
-        });
-        return `*${post.name}*\n${rows.join('\n')}`;
-      }).filter(Boolean);
-      if (blocks.length) msg += `${CATEGORY_ICONS[cat] || '📌'} *${cat.toUpperCase()}*\n${blocks.join('\n')}\n\n`;
-    });
-
-    // Pending coverage: everything still open, today included
     const reasonTxt = { pedido: 'QRA a definir', folga: 'folga sem cobertura', fds: 'fim de semana vago' };
     const pend = this.allPendings();
-    msg += `${line}\n🚨 *COBERTURAS PENDENTES* (${pend.length})\n`;
+    msg += `🔴 *COBERTURAS A RESOLVER* (${pend.length})\n`;
     msg += pend.length
       ? pend.map(u => `  🔴 ${slotLabel(u.date, u.shift)} — ${u.post.name} (${reasonTxt[u.kind] || 'sem cobertura'})`).join('\n')
       : '  ✅ Nenhuma';
-    msg += '\n\n';
+    msg += `\n\n`;
 
-    // Coverage already scheduled with a QRA, from the current shift on
-    const programadas = Object.values(s.coberturas)
+    const agendadas = Object.values(s.coberturas)
       .filter(c => !c.pending && s.posts[c.postId] && !slotEnded(s.posts[c.postId], c.date, shiftsOf(c.turno).slice(-1)[0] || 'diurno'))
       .sort((a, b) => (a.date + a.turno).localeCompare(b.date + b.turno));
-    msg += `🟡 *COBERTURAS PROGRAMADAS* (${programadas.length})\n`;
-    msg += programadas.length
-      ? programadas.map(c => `  🟡 ${slotLabel(c.date, shiftsOf(c.turno)[0])}${c.turno === '24h' ? ' + noturno' : ''} — ${s.posts[c.postId].name}: ${c.qraName}${c.qraId ? '' : ' (temporário)'}`).join('\n')
+    msg += `🟢 *COBERTURAS AGENDADAS* (${agendadas.length})\n`;
+    msg += agendadas.length
+      ? agendadas.map(c => `  🟢 ${slotLabel(c.date, shiftsOf(c.turno)[0])}${c.turno === '24h' ? ' + noturno' : ''} — ${s.posts[c.postId].name}: ${c.qraName}${c.qraId ? '' : ' (temporário)'}`).join('\n')
       : '  Nenhuma';
-    msg += '\n\n';
-
-    msg += `${line}\n📊 *RESUMO DE HOJE:*\n🟢 Titular: ${totals.ok} | 🟡 Cobertura: ${totals.cover}\n🔴 Sem cobertura: ${totals.missing} | ⚪ Ninguém escalado: ${totals.empty}`;
+    msg += `\n${line}`;
     return msg;
   }
 
@@ -1648,6 +1649,8 @@ class CoberturasApp {
     on('qra-pick', 'change', () => this.onQraPickChange());
     on('whatsapp-btn', 'click', () => this.exportWhatsApp());
     on('qra-search', 'input', () => this.renderQraList());
+    on('post-search', 'input', () => this.renderPosts());
+    on('agenda-search', 'input', () => this.applyAgendaFilter());
 
     on('add-folga-btn', 'click', () => this.showFolgaModal(null));
     on('save-folga', 'click', () => this.saveFolga());
