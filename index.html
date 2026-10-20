@@ -85,6 +85,7 @@
 
     <!-- ===== FLOATING ACTION BUTTONS ===== -->
     <div class="fab-container">
+        <button id="sound-btn" class="fab fab-config" data-tooltip="Som dos alertas" aria-label="Som dos alertas">🔕</button>
         <button id="config-btn" class="fab fab-config" data-tooltip="Configurações Firebase" aria-label="Configurações">⚙️</button>
         <button id="add-post-btn" class="fab fab-add" data-tooltip="Adicionar novo posto" aria-label="Adicionar posto">➕</button>
         <button id="whatsapp-btn" class="fab fab-whatsapp" data-tooltip="Compartilhar via WhatsApp" aria-label="Compartilhar WhatsApp">📱</button>
@@ -184,6 +185,12 @@
             <input type="hidden" id="qra-turno" value="">
             <div id="qra-slot-info" class="slot-info"></div>
 
+            <div class="form-group" id="qra-custom-group" style="display: none;">
+                <label class="form-label" for="qra-custom-shift">Turno</label>
+                <select id="qra-custom-shift" class="form-select"></select>
+                <label class="form-label" style="margin-top: 10px;">Dias da semana</label>
+                <div class="checkbox-group" id="qra-custom-days"></div>
+            </div>
             <div class="form-group" id="qra-pick-group">
                 <label class="form-label" for="qra-pick">Quem vai ocupar a vaga</label>
                 <select id="qra-pick" class="form-select"></select>

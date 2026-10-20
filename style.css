@@ -1767,3 +1767,5 @@ body {
 @media (max-width: 700px) {
   .who.cover.big { font-size: 0.8rem; padding: 5px 6px; }
 }
+.slot-lock { font-size: 0.72rem; color: rgba(255, 255, 255, 0.55); font-weight: 600; }
+.slot-add-custom { width: 100%; border-style: dotted; opacity: 0.75; }
