@@ -43,3 +43,6 @@ O "+ adicionar" da vaga já sabe o posto e o turno: basta escolher alguém da re
    ```
 3. Em ⚙️ Configurações do projeto → Seus apps → `</>` (Web), registrar o app e copiar o `firebaseConfig`.
 4. Colar o `firebaseConfig` no app (⚙️). Os postos do QTI são importados automaticamente no primeiro acesso.
+
+## Publicar uma versão nova
+Ao publicar, aumente o número em `APP_VERSION` (app.js) **e** em `version.json` (o mesmo valor). Os apps abertos verificam a cada 5 minutos e se atualizam sozinhos.

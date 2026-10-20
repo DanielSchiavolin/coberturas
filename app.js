@@ -30,6 +30,9 @@ const DEFAULT_POSTS = [
   { id: 'ibirapuera_1789936286981', name: 'Ibirapuera', category: 'Limpeza', escalaType: 'hibrido', days: [3], alertTimeDiurno: '05:00', alertTimeNoturno: '', hibridoSchedule: ['folga','folga','folga','diurno','folga','folga','folga'] },
 ];
 
+// Bump together with version.json on every deploy: open apps reload themselves when it changes
+const APP_VERSION = '2026-10-20.2';
+
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
 const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -726,6 +729,8 @@ class FirebaseManager {
   }
 
   set(path, value) { return this.db.ref(path).set(value); }
+  // Atomic read-modify-write on the server value (fn returns the new value, or undefined to abort)
+  transaction(path, fn) { return this.db.ref(path).transaction(fn).then(r => r.committed); }
   update(path, value) { return this.db.ref(path).update(value); }
   remove(path) { return this.db.ref(path).remove(); }
 }
@@ -794,6 +799,11 @@ class CoberturasApp {
       .then(seeded => { if (seeded) this.showToast('🏢 Postos do QTI importados para o banco de coberturas.', 'success'); })
       .catch(err => console.warn('seedPostsIfEmpty:', err));
 
+    // Reload by itself when a new version is published (no stale screens writing old logic)
+    this.checkForUpdate();
+    setInterval(() => this.checkForUpdate(), 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.checkForUpdate(); });
+
     // Re-evaluate shift changes / alarms every 30 s
     setInterval(() => this.queueRender(), 30000);
     return true;
@@ -816,6 +826,21 @@ class CoberturasApp {
       this.applyAgendaFilter();
       this.updateAlerts();
     });
+  }
+
+  async checkForUpdate() {
+    try {
+      const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const { v } = await res.json();
+      if (!v || v === APP_VERSION || this.updating) return;
+      // never reload in the middle of a form
+      if (document.querySelector('.modal-overlay.active')) return;
+      this.updating = true;
+      this.showToast('⬆️ Nova versão do app — atualizando…', 'info');
+      await Promise.all(['index.html', 'app.js', 'style.css'].map(f => fetch(f, { cache: 'reload' }).catch(() => null)));
+      setTimeout(() => location.reload(), 800);
+    } catch (e) { /* offline: try again later */ }
   }
 
   // ===== Writes (with visible failure, never silent) =====
@@ -1302,20 +1327,56 @@ class CoberturasApp {
     return { postId: main.postId, turno: main.turno, weekOf: main.weekOf, dows: main.dows, extra: vagas.slice(1).map(clean) };
   }
 
-  // Remove one vaga from a QRA. With escala dupla the other vaga stays; with none left he becomes reserve.
+  // Change a QRA's vagas atomically on the SERVER value, so a change made a moment before on
+  // another device (or an old cached screen) is never overwritten. mutate(vagas) → new list.
+  async updateQraVagas(qraId, mutate, successMsg) {
+    let result = null;
+    const ok = await this.write(this.firebase.transaction(`qras/${qraId}`, cur => {
+      if (cur === null) return null; // not loaded yet: Firebase retries with the server value
+      const next = mutate(this.sched.qraVagas(cur));
+      if (!next) return; // abort
+      result = next;
+      return { ...cur, ...this.vagasToStore(next) };
+    }).then(committed => { if (!committed) throw new Error('transaction aborted'); }), successMsg);
+    return ok ? result : null;
+  }
+
+  sameVaga(a, b) {
+    return a.postId === b.postId && this.sched.vagaKey(a) === this.sched.vagaKey(b) && (a.weekOf || '') === (b.weekOf || '');
+  }
+
+  // Remove one vaga from a QRA. With escala dupla the other vaga stays; with none left he becomes
+  // reserve and his future folgas (which only made sense for his vagas) are removed too.
   confirmUnassignQra(qraId, postId, key) {
     const s = this.sched;
     const q = s.qras[qraId];
     if (!q) return;
     const vagas = s.qraVagas(q);
-    const target = vagas.find(v => v.postId === postId && s.vagaKey(v) === key) || vagas.find(v => v.postId === postId) || vagas[0];
+    const post = s.posts[postId];
+    const wk = post && WEEKLY_TURNOS.includes(String(key).split(':')[0]) ? s.targetWeekOf(post) : null;
+    const target = vagas.find(v => v.postId === postId && s.vagaKey(v) === key && (!wk || v.weekOf === wk))
+      || vagas.find(v => v.postId === postId && s.vagaKey(v) === key) || vagas.find(v => v.postId === postId) || vagas[0];
     if (!target) return;
     const rest = vagas.filter(v => v !== target);
+    const futureFolgas = Object.values(s.folgas).filter(f => f.qraId === qraId && f.date >= todayStr());
     const msg = rest.length
       ? `Tirar ${q.name} da vaga ${this.vagaLabel(target)}? Ele continua em ${rest.map(v => this.vagaLabel(v)).join(' + ')}.`
-      : `Tirar ${q.name} da vaga ${this.vagaLabel(target)}? Ele continua na lista geral de QRAs como reserva e pode ser usado em coberturas.`;
-    this.confirm(msg, () => this.write(this.firebase.update(`qras/${qraId}`, this.vagasToStore(rest)),
-      rest.length ? `${q.name} saiu de ${this.vagaLabel(target)}` : `${q.name} saiu do posto e ficou na reserva`));
+      : `Tirar ${q.name} da vaga ${this.vagaLabel(target)}? Ele continua na lista geral de QRAs como reserva e pode ser usado em coberturas.${futureFolgas.length ? ` As ${futureFolgas.length} folga(s) futura(s) dele serão apagadas.` : ''}`;
+    this.confirm(msg, async () => {
+      const left = await this.updateQraVagas(qraId, cur => {
+        const idx = cur.findIndex(v => this.sameVaga(v, target));
+        if (idx < 0) return cur; // already removed elsewhere: just rewrite clean data
+        return cur.filter((_, i) => i !== idx);
+      }, rest.length ? `${q.name} saiu de ${this.vagaLabel(target)}` : `${q.name} saiu do posto e ficou na reserva`);
+      if (left && left.length === 0) {
+        const folgas = Object.values(this.sched.folgas).filter(f => f.qraId === qraId && f.date >= todayStr());
+        if (folgas.length) {
+          const updates = {};
+          folgas.forEach(f => { updates[`folgas/${f.id}`] = null; });
+          this.write(this.firebase.update('/', updates));
+        }
+      }
+    });
   }
 
   // Ask "escala dupla?" before giving a second vaga to a QRA; refuse real time clashes
@@ -1384,11 +1445,11 @@ class CoberturasApp {
         const vagas = s.qraVagas(q);
         if (vagas.length === 0) {
           this.hideModal('qra-modal');
-          return this.write(this.firebase.update(`qras/${pick}`, this.vagasToStore([vaga])), `${q.name} na vaga ${label}`);
+          return this.updateQraVagas(pick, cur => (cur.some(v => this.sameVaga(v, vaga)) ? cur : cur.concat([vaga])), `${q.name} na vaga ${label}`);
         }
         return this.confirmDupla(q, vaga, () => {
           this.hideModal('qra-modal');
-          this.write(this.firebase.update(`qras/${pick}`, this.vagasToStore(vagas.concat([vaga]))), `2× ${q.name} em escala dupla: ${label}`);
+          this.updateQraVagas(pick, cur => (cur.some(v => this.sameVaga(v, vaga)) ? cur : cur.concat([vaga])), `2× ${q.name} em escala dupla: ${label}`);
         });
       }
       const id = makeId(name);
