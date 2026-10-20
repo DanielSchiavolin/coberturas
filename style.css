@@ -1751,3 +1751,19 @@ body {
 .who.cover.blink { animation: cover-blink 1s ease-in-out infinite; }
 
 #view-postos .toolbar .form-input, #view-agenda .toolbar .form-input { flex: 1 1 100%; margin: 0; }
+
+/* Today line: covering QRA big and full width, covered titular in red */
+.who.cover.big {
+  flex: 1 1 100%;
+  display: block;
+  font-size: 1rem;
+  font-weight: 800;
+  padding: 6px 10px;
+  border-radius: 8px;
+  text-align: center;
+  margin-top: 2px;
+}
+.who.covered { background: rgba(231, 76, 60, 0.2); color: #FF6B5B; font-weight: 700; text-decoration: none; }
+@media (max-width: 700px) {
+  .who.cover.big { font-size: 0.8rem; padding: 5px 6px; }
+}

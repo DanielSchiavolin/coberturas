@@ -830,9 +830,11 @@ class CoberturasApp {
       const isPast = slotEnded(post, today, shift);
       if (!isPast && slotAlarmActive(post, today, shift) && st.descoberto > 0) flashingNow = true;
       const parts = [];
-      st.presentes.forEach(q => parts.push(`<span class="who ok">${esc(q.name)}</span>`));
-      st.ausentes.forEach(q => parts.push(`<span class="who off">🏖️ ${esc(q.name)}</span>`));
-      st.coberturas.forEach(c => parts.push(`<span class="who cover${isPast ? '' : ' blink'}">🔁 ${esc(c.qraName)}</span>`));
+      // When the shift has a cobertura, the titular being covered shows in red
+      const covered = st.coberturas.length > 0;
+      st.presentes.forEach(q => parts.push(`<span class="who ${covered ? 'covered' : 'ok'}">${esc(q.name)}</span>`));
+      st.ausentes.forEach(q => parts.push(`<span class="who ${covered ? 'covered' : 'off'}">🏖️ ${esc(q.name)}</span>`));
+      st.coberturas.forEach(c => parts.push(`<span class="who cover big${isPast ? '' : ' blink'}">🔁 ${esc(c.qraName)}</span>`));
       st.pedidos.forEach(() => parts.push('<span class="who alert">⏳ cobertura a definir</span>'));
       if (st.descoberto > 0) parts.push('<span class="who alert">⚠️ SEM COBERTURA</span>');
       if (st.titulares.length === 0 && st.coberturas.length === 0) parts.push('<span class="who muted">Ninguém escalado</span>');
