@@ -70,6 +70,18 @@
                 <input type="search" id="qra-search" class="form-input" placeholder="🔎 Buscar QRA ou posto...">
                 <button id="add-qra-btn" class="btn-primary btn-inline">➕ Novo QRA</button>
             </div>
+            <div class="filter-row" id="qra-filters">
+                <div class="filter-group" data-group="shift">
+                    <button class="filter-chip active" data-value="">Todos</button>
+                    <button class="filter-chip" data-value="diurno">☀️ Diurno</button>
+                    <button class="filter-chip" data-value="noturno">🌙 Noturno</button>
+                </div>
+                <div class="filter-group" data-group="parity">
+                    <button class="filter-chip active" data-value="">Todos</button>
+                    <button class="filter-chip" data-value="0">Par</button>
+                    <button class="filter-chip" data-value="1">Ímpar</button>
+                </div>
+            </div>
             <div id="qra-list"></div>
         </section>
 

@@ -31,7 +31,7 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-10-21.2';
+const APP_VERSION = '2026-10-21.3';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
@@ -828,7 +828,9 @@ class CoberturasApp {
     this.renderQueued = true;
     setTimeout(() => {
       this.renderQueued = false;
-      if (!this.loaded.posts) return;
+      // Wait for ALL data (posts arrive a moment before QRAs/coberturas): computing alerts with
+      // half the data showed false "sem cobertura" warnings and sounds on startup
+      if (!Object.values(this.loaded).every(Boolean)) return;
       this.weekendPending = this.sched.weekendPendingSlots();
       this.uncovered = this.sched.uncoveredSlots(ALERT_DAYS_AHEAD);
       this.requests = this.sched.pendingRequests();
@@ -1057,6 +1059,7 @@ class CoberturasApp {
     const list = document.getElementById('qra-list');
     const query = normalizeText(document.getElementById('qra-search').value);
     const qras = Object.values(s.qras)
+      .filter(q => this.qraMatchesFilters(q))
       .filter(q => !query || normalizeText(q.name).includes(query)
         || normalizeText(s.qraVagas(q).map(v => this.postLabel(v.postId)).join(' ') || this.postLabel('')).includes(query)
         || (query.includes('dupla') && s.isDupla(q)))
@@ -1097,6 +1100,19 @@ class CoberturasApp {
         </div>
       `;
     }).join('');
+  }
+
+  // QRA tab filters: shift (diurno/noturno) and par/ímpar; a QRA matches if ONE of his vagas does
+  qraMatchesFilters(q) {
+    const f = this.qraFilter || {};
+    if (!f.shift && f.parity === undefined) return true;
+    return this.sched.qraVagas(q).some(v => {
+      const def = QRA_TURNOS[v.turno];
+      if (!def) return false;
+      if (f.shift && !def.shifts.includes(f.shift)) return false;
+      if (f.parity !== undefined && def.parity !== f.parity) return false;
+      return true;
+    });
   }
 
   // ----- Agenda (folgas & coberturas) -----
@@ -2013,6 +2029,16 @@ class CoberturasApp {
     on('export-escala-btn', 'click', () => this.exportEscala());
     on('export-cob-btn', 'click', () => { this.hideModal('export-modal'); this.exportWhatsApp(); });
     on('qra-search', 'input', () => this.renderQraList());
+    this.qraFilter = {};
+    document.querySelectorAll('#qra-filters .filter-group').forEach(group => {
+      group.querySelectorAll('.filter-chip').forEach(chip => chip.addEventListener('click', () => {
+        group.querySelectorAll('.filter-chip').forEach(c => c.classList.toggle('active', c === chip));
+        const v = chip.dataset.value;
+        if (group.dataset.group === 'shift') this.qraFilter.shift = v;
+        else this.qraFilter.parity = v === '' ? undefined : Number(v);
+        this.renderQraList();
+      }));
+    });
     on('post-search', 'input', () => this.renderPosts());
     on('agenda-search', 'input', () => this.applyAgendaFilter());
 

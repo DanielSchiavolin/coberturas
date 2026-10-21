@@ -1775,3 +1775,14 @@ body {
 .export-title { font-weight: 800; font-size: 1rem; margin-bottom: 4px; }
 .export-hint { font-size: 0.8rem; color: rgba(255, 255, 255, 0.65); margin-bottom: 10px; line-height: 1.4; }
 #export-range { color: var(--accent); font-weight: 600; }
+
+/* QRA filters */
+.filter-row { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 12px; }
+.filter-group { display: inline-flex; background: rgba(255, 255, 255, 0.06); border-radius: 10px; padding: 3px; gap: 2px; }
+.filter-chip { background: transparent; border: none; color: rgba(255, 255, 255, 0.7); font: 600 0.82rem var(--font-main); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+.filter-chip.active { background: var(--accent); color: #1B2A4A; }
+@media (max-width: 700px) {
+  .filter-row { gap: 6px; }
+  .filter-group { flex: 1 1 100%; }
+  .filter-chip { flex: 1 1 0; padding: 8px 4px; font-size: 0.78rem; }
+}
