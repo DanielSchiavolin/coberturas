@@ -31,7 +31,7 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-10-20.2';
+const APP_VERSION = '2026-10-21.1';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
@@ -1860,6 +1860,66 @@ class CoberturasApp {
     window.open(`https://wa.me/?text=${encodeURIComponent(this.buildWhatsAppMessage())}`, '_blank');
   }
 
+  showExportModal() {
+    if (!this.loaded.posts) return this.showToast('Aguarde carregar os dados', 'error');
+    document.getElementById('export-date').value = todayStr();
+    this.updateExportRange();
+    this.showModal('export-modal');
+  }
+
+  updateExportRange() {
+    const d = document.getElementById('export-date').value;
+    document.getElementById('export-range').textContent = d
+      ? `🌙 Noturno ${dateLabel(d)} (19h) → ☀️ Diurno ${dateLabel(addDays(d, 1))} (07h–19h)`
+      : '';
+  }
+
+  // Who is at the post in one shift, considering coberturas. Titulares whose vaga is covered by
+  // someone else are replaced by the cover. Returns { dot, text }.
+  dutyLine(post, date, shift) {
+    const s = this.sched;
+    const st = s.slotStatus(post, date, shift);
+    const covers = st.coberturas.map(c => {
+      const covered = st.titulares.filter(q => s.qraVagasOn(q, date, shift, post.id).some(v => s.releaseCover(q, v, date, shift) === c) || s.folgaOf(q.id, date));
+      return `${c.qraName}${c.qraId ? '' : ' (temporário)'}${covered.length ? ` — cobrindo ${covered.map(q => q.name).join(', ')}` : ''}`;
+    });
+    const stay = st.presentes.filter(q => !s.qraVagasOn(q, date, shift, post.id).some(v => s.releaseCover(q, v, date, shift)));
+    const names = [...stay.map(q => q.name), ...covers];
+    if (st.descoberto > 0) return { dot: '🔴', text: `SEM COBERTURA (${st.ausentes.map(q => q.name).join(', ')} de folga)${names.length ? ` · ${names.join(' · ')}` : ''}` };
+    if (!names.length && st.pedidos.length) return { dot: '🔴', text: 'cobertura A DEFINIR' };
+    if (!names.length) return { dot: '⚪', text: 'ninguém escalado' };
+    return { dot: covers.length ? '🟡' : '🟢', text: names.join(' · ') };
+  }
+
+  // Escala: night of `date` followed by the day shift of the next date
+  buildEscalaMessage(date) {
+    const s = this.sched;
+    const next = addDays(date, 1);
+    const line = '━━━━━━━━━━━━━━━━━━━━━';
+    const fmt = d => d.split('-').reverse().slice(0, 2).join('/');
+    const block = (shift, day) => this.postsByCategory().map(([cat, posts]) => {
+      const rows = posts.filter(p => s.postWorks(p, day, shift)).map(p => {
+        const { dot, text } = this.dutyLine(p, day, shift);
+        const entra = shift === 'noturno' && shiftWindow(p, day, 'noturno').start.getHours() !== 19 ? ' (entra 17h)' : '';
+        return `  ${dot} ${p.name}${entra}: ${text}`;
+      });
+      return rows.length ? `*${cat}*\n${rows.join('\n')}` : '';
+    }).filter(Boolean).join('\n\n');
+    const dn = d => DAY_NAMES[parseDate(d).getDay()];
+    let msg = `🛡️ *FRONT SECURITY — ESCALA*\n${line}\n\n`;
+    msg += `🌙 *NOTURNO — ${dn(date)} ${fmt(date)}* (19h → 07h de ${fmt(next)})\n\n${block('noturno', date) || '  (nenhum posto)'}\n\n${line}\n\n`;
+    msg += `☀️ *DIURNO — ${dn(next)} ${fmt(next)}* (07h → 19h)\n\n${block('diurno', next) || '  (nenhum posto)'}\n\n${line}\n`;
+    msg += '🟢 titular · 🟡 cobertura · 🔴 sem cobertura · ⚪ ninguém escalado';
+    return msg;
+  }
+
+  exportEscala() {
+    const date = document.getElementById('export-date').value;
+    if (!date) return this.showToast('Escolha a data do noturno', 'error');
+    this.hideModal('export-modal');
+    window.open(`https://wa.me/?text=${encodeURIComponent(this.buildEscalaMessage(date))}`, '_blank');
+  }
+
   // ===== Firebase setup =====
 
   async saveFirebaseConfig() {
@@ -1936,7 +1996,10 @@ class CoberturasApp {
     on('add-qra-btn', 'click', () => this.showQraModal(null));
     on('save-qra', 'click', () => this.saveQra());
     on('qra-pick', 'change', () => this.onQraPickChange());
-    on('whatsapp-btn', 'click', () => this.exportWhatsApp());
+    on('whatsapp-btn', 'click', () => this.showExportModal());
+    on('export-date', 'change', () => this.updateExportRange());
+    on('export-escala-btn', 'click', () => this.exportEscala());
+    on('export-cob-btn', 'click', () => { this.hideModal('export-modal'); this.exportWhatsApp(); });
     on('qra-search', 'input', () => this.renderQraList());
     on('post-search', 'input', () => this.renderPosts());
     on('agenda-search', 'input', () => this.applyAgendaFilter());

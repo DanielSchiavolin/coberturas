@@ -263,6 +263,29 @@
         </div>
     </div>
 
+    <!-- ===== EXPORT MODAL ===== -->
+    <div id="export-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close" data-close="export-modal" aria-label="Fechar">✕</button>
+            <h2 class="modal-title">📱 Exportar para o WhatsApp</h2>
+            <div class="export-block">
+                <div class="export-title">📋 Escala</div>
+                <p class="export-hint">Noturno da data escolhida, seguido do diurno do dia seguinte (já com as coberturas).</p>
+                <div class="form-group">
+                    <label class="form-label" for="export-date">Noturno do dia</label>
+                    <input type="date" id="export-date" class="form-input">
+                </div>
+                <div id="export-range" class="export-hint"></div>
+                <button id="export-escala-btn" class="btn-primary">📋 Exportar escala</button>
+            </div>
+            <div class="export-block">
+                <div class="export-title">🔁 Coberturas</div>
+                <p class="export-hint">Coberturas a resolver e coberturas agendadas.</p>
+                <button id="export-cob-btn" class="btn-primary btn-cover">🔁 Exportar coberturas</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== CONFIRM DIALOG ===== -->
     <div id="confirm-overlay" class="modal-overlay">
         <div class="confirm-box">

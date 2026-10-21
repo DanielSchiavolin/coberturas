@@ -1769,3 +1769,9 @@ body {
 }
 .slot-lock { font-size: 0.72rem; color: rgba(255, 255, 255, 0.55); font-weight: 600; }
 .slot-add-custom { width: 100%; border-style: dotted; opacity: 0.75; }
+
+/* Export modal */
+.export-block { background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+.export-title { font-weight: 800; font-size: 1rem; margin-bottom: 4px; }
+.export-hint { font-size: 0.8rem; color: rgba(255, 255, 255, 0.65); margin-bottom: 10px; line-height: 1.4; }
+#export-range { color: var(--accent); font-weight: 600; }
