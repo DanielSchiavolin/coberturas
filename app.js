@@ -31,7 +31,7 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-10-21.3';
+const APP_VERSION = '2026-10-21.4';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
@@ -1612,9 +1612,13 @@ class CoberturasApp {
           && c.date === date && shiftsOf(c.turno).includes(shift) && (c.vaga ? c.vaga === slot : !holder || off));
         const requested = Object.values(s.coberturas).some(c => c.pending && c.id !== this.cobEditId && c.postId === post.id
           && c.date === date && shiftsOf(c.turno).includes(shift) && (!c.vaga || c.vaga === slot));
-        const open = !covered && (!holder || off || requested);
+        // an empty vaga only needs someone if nobody else covers that shift that day (e.g. Jaguare:
+        // "Diurno par" is empty but the chosen-days vagas already cover the diurno)
+        const st = s.slotStatus(post, date, shift);
+        const shiftTaken = st.presentes.length > 0 || st.coberturas.length > 0;
+        const open = !covered && ((!holder && !shiftTaken) || off || requested);
         const vaga = s.parseVagaKey(post.id, slot);
-        const who = holder ? `titular: ${holder.name}${off ? ' (de folga)' : ''}` : 'vaga vazia';
+        const who = holder ? `titular: ${holder.name}${off ? ' (de folga)' : ''}` : (shiftTaken ? 'turno já coberto' : 'vaga vazia');
         return { value: `${shift}|${slot}`, shift, open, label: `${vagaTurnoLabel(vaga)} — ${covered ? 'já coberta' : (requested && holder && !off ? `pedido a definir · ${who}` : who)}` };
       });
       options = all.filter(o => o.open || o.value === editKey);
@@ -1636,7 +1640,56 @@ class CoberturasApp {
     const match = options.find(o => o.value === current) || options.find(o => current && o.value.split('|')[0] === String(current).split('|')[0]);
     select.value = match ? match.value : options[0].value;
     this.cobOptionsNote = note;
+    this.fillCobQraSelect();
     this.updateCobCheck();
+  }
+
+  // "Quem vai cobrir": QRAs grouped by availability for the chosen post/date/turno,
+  // considering fixed vagas, coberturas already placed and folgas.
+  // 🟢 free · 🟡 free but double shift (dobra) · 🔴 busy in that shift
+  fillCobQraSelect() {
+    const s = this.sched;
+    const sel = document.getElementById('cob-qra');
+    const current = sel.value;
+    const postId = document.getElementById('cob-post').value;
+    const date = document.getElementById('cob-date').value;
+    const turno = (document.getElementById('cob-turno').value || '').split('|')[0];
+    const fixed = '<option value="">— selecione quem vai cobrir —</option>' +
+      '<option value="__pending__">⏳ Ainda não sei — só criar o alerta</option>' +
+      '<option value="__temp__">✍️ QRA temporário (digitar nome)</option>';
+    const qras = Object.values(s.qras).sort((a, b) => a.name.localeCompare(b.name));
+    const where = q => {
+      const vagas = s.qraVagas(q);
+      return vagas.length ? [...new Set(vagas.map(v => (s.posts[v.postId] || { name: '?' }).name))].join(' + ') : 'reserva';
+    };
+    let html = fixed;
+    if (!postId || !date || !turno) {
+      html += qras.map(q => `<option value="${q.id}">${esc(q.name)} — ${esc(where(q))}</option>`).join('');
+    } else {
+      const groups = { ok: [], dobra: [], busy: [] };
+      qras.forEach(q => {
+        const res = s.checkCobertura({ postId, date, turno, person: { qraId: q.id, name: q.name }, excludeCobId: this.cobEditId || undefined });
+        const off = s.folgaOf(q.id, date) ? ' · 🏖️ de folga' : '';
+        if (res.conflicts.length) {
+          const emp = shiftsOf(turno).flatMap(sh => s.empenhosAt({ qraId: q.id }, date, sh, this.cobEditId || undefined))[0];
+          const busyAt = emp ? (emp.postId === postId ? 'já é titular aqui' : `ocupado em ${(s.posts[emp.postId] || { name: '?' }).name}${emp.kind === 'cobertura' ? ' (cobertura)' : ''}`) : 'ocupado';
+          groups.busy.push({ q, info: busyAt });
+        } else if (res.warnings.some(w => w.startsWith('Dobra'))) {
+          const side = res.warnings.filter(w => w.startsWith('Dobra')).map(w => (w.includes('ANTERIOR') ? 'turno antes' : 'turno depois'));
+          groups.dobra.push({ q, info: `dobra (${[...new Set(side)].join(' e ')}) · ${where(q)}${off}` });
+        } else {
+          groups.ok.push({ q, info: `${where(q)}${off}` });
+        }
+      });
+      const block = (list, label, cls, icon) => list.length
+        ? `<optgroup label="${label} (${list.length})">${list.map(({ q, info }) => `<option value="${q.id}" class="${cls}">${icon} ${esc(q.name)} — ${esc(info)}</option>`).join('')}</optgroup>`
+        : '';
+      html += block(groups.ok, '🟢 Disponíveis', 'opt-free', '🟢')
+        + block(groups.dobra, '🟡 Disponíveis com dobra', 'opt-dobra', '🟡')
+        + block(groups.busy, '🔴 Ocupados nesse turno', 'opt-busy', '🔴');
+    }
+    sel.innerHTML = html;
+    sel.value = [...sel.options].some(o => o.value === current) ? current : '';
   }
 
   onCobQraChange() {
@@ -2051,7 +2104,7 @@ class CoberturasApp {
     on('save-cobertura', 'click', () => this.saveCobertura());
     on('cob-post', 'change', () => this.refreshCobTurnoOptions());
     on('cob-date', 'change', () => this.refreshCobTurnoOptions());
-    on('cob-turno', 'change', () => this.updateCobCheck());
+    on('cob-turno', 'change', () => { this.fillCobQraSelect(); this.updateCobCheck(); });
     on('cob-qra', 'change', () => this.onCobQraChange());
     on('cob-temp-name', 'input', () => this.updateCobCheck());
   }

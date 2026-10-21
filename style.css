@@ -1786,3 +1786,8 @@ body {
   .filter-group { flex: 1 1 100%; }
   .filter-chip { flex: 1 1 0; padding: 8px 4px; font-size: 0.78rem; }
 }
+
+/* "Quem vai cobrir": availability colors (desktop browsers; phones show the 🟢🟡🔴 prefix) */
+#cob-qra option.opt-free { color: #2ECC71; font-weight: 700; }
+#cob-qra option.opt-dobra { color: #F5B041; }
+#cob-qra option.opt-busy { color: #E74C3C; }
