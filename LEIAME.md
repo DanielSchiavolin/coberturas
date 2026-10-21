@@ -26,7 +26,7 @@ Cada posto tem uma **tabela de vagas** e cada vaga aceita **um QRA só** (para t
 - **Híbrido**: Diurno seg–sex (se houver) · Diurno sábado · Diurno domingo · Noturno par · Noturno ímpar
 - **Diurno**: Diurno (todos os dias de funcionamento)
 
-Par/ímpar = 12x36 pelo dia do mês (par = 2, 4, 6…; ímpar = 1, 3, 5…).
+Par/ímpar = **12x36 alternado contínuo**: quem trabalha num dia folga no seguinte, sem exceção (quem trabalhou dia 31 folga dia 1). Em outubro/2026 a turma "par" trabalhou os dias pares; depois disso ela só alterna, então em alguns meses a turma "par" cai nos dias ímpares. O selo "HOJE" na tabela mostra quem está de serviço.
 O "+ adicionar" da vaga já sabe o posto e o turno: basta escolher alguém da reserva ou digitar um nome novo.
 
 **Escala dupla**: ao colocar numa vaga um QRA que já tem outra vaga (no mesmo posto ou em outro), o app pergunta "É ESCALA DUPLA?". Se houver choque de horário, recusa; se houver dobra (turno colado), avisa. Confirmando, o QRA aparece com o selo **2× ESCALA DUPLA** nas duas vagas e na lista, e qualquer cobertura para onde ele for mandado é verificada contra as duas escalas. O ✕ tira só aquela vaga.

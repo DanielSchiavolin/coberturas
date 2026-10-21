@@ -31,7 +31,7 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-10-21.1';
+const APP_VERSION = '2026-10-21.2';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
@@ -82,6 +82,18 @@ function addDays(str, n) {
   const d = parseDate(str);
   d.setDate(d.getDate() + n);
   return toDateStr(d);
+}
+
+// 12x36 alternation: the team works one day and rests the next, ALWAYS (also from the 31st to
+// the 1st). "Par" = the team that worked the even days of October 2026; from then on it simply
+// alternates, so it does not depend on the day of the month. 0 = turma par, 1 = turma ímpar.
+const ALTERNATION_ANCHOR = '2026-10-02';
+function dayNumber(date) {
+  const [y, m, d] = date.split('-').map(Number);
+  return Math.round(Date.UTC(y, m - 1, d) / 86400000);
+}
+function alternationParity(date) {
+  return (((dayNumber(date) - dayNumber(ALTERNATION_ANCHOR)) % 2) + 2) % 2;
 }
 
 // Monday of the week (Mon→Sun) containing the date
@@ -330,7 +342,7 @@ class Schedule {
     const def = QRA_TURNOS[vaga.turno];
     if (!def || !def.shifts.includes(shift)) return false;
     const d = parseDate(date);
-    if (def.parity !== null && d.getDate() % 2 !== def.parity) return false;
+    if (def.parity !== null && alternationParity(date) !== def.parity) return false;
     if (def.dows && !def.dows.includes(d.getDay())) return false;
     if (def.custom && !(vaga.dows || []).includes(d.getDay())) return false;
     if (WEEKLY_TURNOS.includes(vaga.turno) && vaga.weekOf && vaga.weekOf !== weekStart(date)) return false;
@@ -2021,7 +2033,7 @@ class CoberturasApp {
 
 // Exposed for tests (Node) without touching the DOM
 if (typeof module !== 'undefined') {
-  module.exports = { Schedule, shiftsOf, prevSlot, nextSlot, addDays, toDateStr, currentSlot, shiftWindow, slotEnded, slotAlarmActive, postHoursLabel };
+  module.exports = { Schedule, shiftsOf, prevSlot, nextSlot, addDays, toDateStr, currentSlot, shiftWindow, slotEnded, slotAlarmActive, postHoursLabel, alternationParity };
 } else {
   const app = new CoberturasApp();
   window.app = app;
