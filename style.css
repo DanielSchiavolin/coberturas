@@ -1791,3 +1791,61 @@ body {
 #cob-qra option.opt-free { color: #2ECC71; font-weight: 700; }
 #cob-qra option.opt-dobra { color: #F5B041; }
 #cob-qra option.opt-busy { color: #E74C3C; }
+
+/* ==========================================================
+   High contrast: brighter text, stronger chips, QRA names bold and eye-catching
+   ========================================================== */
+.post-card { background: #14213D; border-color: rgba(255, 255, 255, 0.18); }
+.post-name { color: #FFFFFF; font-weight: 800; }
+.post-hours { color: rgba(255, 255, 255, 0.85); }
+.category-title { color: #FFFFFF; }
+.category-count, .muted-text { color: rgba(255, 255, 255, 0.75); }
+
+/* slot table */
+.slot-label { color: #E6ECF5; font-weight: 700; }
+.slot-table tr.empty .slot-label { color: rgba(255, 255, 255, 0.7); }
+.slot-table td { border-bottom-color: rgba(255, 255, 255, 0.14); }
+.slot-name {
+  color: #FFD54F;
+  font-weight: 900;
+  font-size: 1.05em;
+  letter-spacing: 0.2px;
+  text-shadow: 0 0 8px rgba(255, 213, 79, 0.35);
+}
+.slot-table tr.is-dupla .slot-name { color: #E1BEE7; text-shadow: 0 0 8px rgba(225, 190, 231, 0.35); }
+.slot-add { color: #FFFFFF; border-color: rgba(255, 255, 255, 0.55); }
+.slot-lock { color: rgba(255, 255, 255, 0.8); }
+.slot-tag { font-weight: 800; }
+.slot-tag.today { background: #2ECC71; color: #0B2914; }
+
+/* today lines */
+.shift-line { background: rgba(255, 255, 255, 0.08); }
+.shift-tag { color: #FFFFFF; }
+.who { font-weight: 800; }
+.who.ok { background: #1E8449; color: #FFFFFF; }
+.who.off { background: rgba(255, 255, 255, 0.16); color: #FFFFFF; }
+.who.cover { background: #1F6FB2; color: #FFFFFF; }
+.who.covered { background: #C0392B; color: #FFFFFF; }
+.who.alert { background: #E74C3C; color: #FFFFFF; }
+.who.muted { color: rgba(255, 255, 255, 0.75); font-weight: 600; }
+@keyframes cover-blink {
+  0%, 100% { background: #1F6FB2; color: #FFFFFF; box-shadow: none; }
+  50% { background: #FFD54F; color: #1B2A4A; box-shadow: 0 0 12px rgba(255, 213, 79, 0.9); }
+}
+
+/* QRA list and agenda */
+.qra-row, .agenda-item { background: #14213D; border-color: rgba(255, 255, 255, 0.18); }
+.qra-name { color: #FFD54F; font-weight: 900; font-size: 1.12rem; }
+.qra-meta { color: #E6ECF5; }
+.qra-next { color: #FFFFFF; font-weight: 600; }
+.agenda-title strong { color: #FFD54F; font-weight: 900; }
+.agenda-note { color: rgba(255, 255, 255, 0.85); }
+
+/* alerts and controls */
+.cover-alert { background: #A93226; border-color: #FF6B5B; }
+.btn-mini { color: #FFFFFF; border-color: rgba(255, 255, 255, 0.3); }
+.btn-mini-cover { background: #1F6FB2; border-color: #5DADE2; color: #FFFFFF; }
+.view-tab { color: #FFFFFF; border-color: rgba(255, 255, 255, 0.22); }
+.filter-chip { color: #FFFFFF; }
+.form-label { color: #FFFFFF; }
+.form-input, .form-select { color: #FFFFFF; border-color: rgba(255, 255, 255, 0.35); }
