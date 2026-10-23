@@ -31,7 +31,7 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-10-22.1';
+const APP_VERSION = '2026-10-23.1';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
@@ -391,20 +391,33 @@ class Schedule {
 
   // Time conflicts of adding `vaga` to a QRA who already has other vagas (next `days` days):
   // choques = same shift on the same day · dobras = shift right before/after one of his shifts
+  // A plantão of his own vaga he really has to work: not on folga and not covered by someone else
+  vagaBusy(qra, v, date, shift, out) {
+    if (!this.vagaScheduled(v, date, shift)) return false;
+    if (this.folgaOf(qra.id, date)) return false;
+    const cov = this.releaseCover(qra, v, date, shift);
+    if (cov) {
+      if (out && !out.released.some(r => r.date === date && r.shift === shift && r.vaga.postId === v.postId)) out.released.push({ date, shift, vaga: v, by: cov.qraName });
+      return false;
+    }
+    return true;
+  }
+
   vagaConflicts(qra, vaga, days = 28) {
     const existing = this.qraVagas(qra);
-    const out = { choques: [], dobras: [] };
+    const out = { choques: [], dobras: [], released: [] };
     const start = todayStr();
     for (let i = 0; i < days; i++) {
       const date = addDays(start, i);
       (QRA_TURNOS[vaga.turno] || { shifts: [] }).shifts.forEach(shift => {
         if (!this.vagaScheduled(vaga, date, shift)) return;
         existing.forEach(v => {
-          if (this.vagaScheduled(v, date, shift)) out.choques.push({ date, shift, vaga: v });
+          // plantões of his other vagas that are covered (or on folga) do not clash
+          if (this.vagaBusy(qra, v, date, shift, out)) out.choques.push({ date, shift, vaga: v });
           const before = prevSlot(date, shift);
           const after = nextSlot(date, shift);
-          if (this.vagaScheduled(v, before.date, before.shift)) out.dobras.push({ date, shift, vaga: v, side: 'anterior', at: before });
-          if (this.vagaScheduled(v, after.date, after.shift)) out.dobras.push({ date, shift, vaga: v, side: 'posterior', at: after });
+          if (this.vagaBusy(qra, v, before.date, before.shift, out)) out.dobras.push({ date, shift, vaga: v, side: 'anterior', at: before });
+          if (this.vagaBusy(qra, v, after.date, after.shift, out)) out.dobras.push({ date, shift, vaga: v, side: 'posterior', at: after });
         });
       });
     }
@@ -1420,7 +1433,10 @@ class CoberturasApp {
     const dobra = conflicts.dobras.length
       ? ` ⚠️ Atenção: vai dar DOBRA (turno colado) ${new Set(conflicts.dobras.map(c => c.date)).size} vez(es) nos próximos 28 dias. Ex.: ${describe(conflicts.dobras)}.`
       : ' Sem choque nem dobra nos próximos 28 dias.';
-    this.confirm(`${q.name} já está escalado em ${current}. É ESCALA DUPLA (vai acumular com ${this.vagaLabel(vaga)})?${dobra}`, onYes);
+    const freed = conflicts.released.slice(0, 3)
+      .map(r => `${slotLabel(r.date, r.shift)} em ${(this.sched.posts[r.vaga.postId] || { name: '?' }).name} já coberto por ${r.by}`);
+    const freedTxt = freed.length ? ` ✅ Considerado: ${freed.join('; ')}.` : '';
+    this.confirm(`${q.name} já está escalado em ${current}. É ESCALA DUPLA (vai acumular com ${this.vagaLabel(vaga)})?${dobra}${freedTxt}`, onYes);
     document.getElementById('confirm-yes').textContent = 'Sim, escala dupla';
   }
 
