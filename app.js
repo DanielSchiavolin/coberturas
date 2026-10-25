@@ -31,7 +31,7 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-10-23.1';
+const APP_VERSION = '2026-10-25.1';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
@@ -2132,5 +2132,8 @@ if (typeof module !== 'undefined') {
 } else {
   const app = new CoberturasApp();
   window.app = app;
-  document.addEventListener('DOMContentLoaded', () => app.init());
+  // The app starts only after the team password is accepted (auth-gate.js)
+  document.addEventListener('DOMContentLoaded', () => {
+    AuthGate.start(app.firebase.getConfig() || CoberturasApp.DEFAULT_CONFIG).then(() => app.init());
+  });
 }
