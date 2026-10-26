@@ -1813,6 +1813,18 @@ body {
   text-shadow: 0 0 8px rgba(255, 213, 79, 0.35);
 }
 .slot-table tr.is-dupla .slot-name { color: #E1BEE7; text-shadow: 0 0 8px rgba(225, 190, 231, 0.35); }
+/* empty vaga filled by a cobertura */
+.slot-table tr.covered td { background: rgba(31, 111, 178, 0.18); }
+.slot-name.slot-cover {
+  display: inline-block;
+  margin: 0 6px 4px 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #1F6FB2;
+  color: #FFFFFF;
+  text-shadow: none;
+}
+.slot-name.slot-cover small { font-weight: 600; opacity: 0.85; }
 .slot-add { color: #FFFFFF; border-color: rgba(255, 255, 255, 0.55); }
 .slot-lock { color: rgba(255, 255, 255, 0.8); }
 .slot-tag { font-weight: 800; }

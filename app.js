@@ -558,6 +558,19 @@ class Schedule {
     });
   }
 
+  // Coberturas (with a QRA) placed on one vaga of a post, not over yet, soonest first.
+  // Old coberturas without vaga info count when the vaga works that date/shift.
+  vagaCoberturas(post, vaga) {
+    const key = this.vagaKey(vaga);
+    const from = addDays(todayStr(), -1);
+    return Object.values(this.coberturas)
+      .filter(c => !c.pending && c.postId === post.id && c.date >= from)
+      .flatMap(c => shiftsOf(c.turno).map(shift => ({ cob: c, date: c.date, shift })))
+      .filter(({ cob, date, shift }) => !slotEnded(post, date, shift)
+        && (cob.vaga ? cob.vaga === key : this.vagaScheduled(vaga, date, shift)))
+      .sort((a, b) => (a.date + a.shift).localeCompare(b.date + b.shift));
+  }
+
   // Coverage requests still waiting for a QRA, from the current slot on (any date ahead)
   pendingRequests() {
     const cur = currentSlot();
@@ -996,6 +1009,10 @@ class CoberturasApp {
       const dupla = holder && s.isDupla(holder);
       // an empty vaga that would put two people in the same shift is locked
       const lock = holder ? null : s.overlapHolders(vaga)[0];
+      // an empty vaga with coberturas shows who covers it (and when)
+      const covers = holder ? [] : s.vagaCoberturas(post, vaga);
+      const coverHtml = covers.map(({ cob, date, shift }) =>
+        `<span class="slot-name slot-cover" onclick="app.showCoberturaModal({ editId: '${cob.id}' })" title="Cobertura — clique para editar">🔁 ${esc(cob.qraName)} <small>${slotLabel(date, shift)}</small></span>`).join('');
       const cell = holder
         ? `<span class="slot-name" onclick="app.showQraModal('${holder.id}')">${esc(holder.name)}</span>
            ${dupla ? `<span class="slot-tag dupla" title="${esc(s.qraVagas(holder).map(v => this.vagaLabel(v)).join(' + '))}">2× ESCALA DUPLA</span>` : ''}
@@ -1003,9 +1020,9 @@ class CoberturasApp {
            <button class="chip-x" onclick="app.confirmUnassignQra('${holder.id}', '${post.id}', '${key}')" title="Tirar desta vaga (continua na lista de QRAs)">✕</button>`
         : lock
           ? `<span class="slot-lock" title="Mesmo turno já ocupado por ${esc(lock.qra.name)} (${esc(vagaTurnoLabel(lock.vaga))})">🔒 ${esc(lock.qra.name)} já cobre</span>`
-          : `<button class="slot-add" onclick="app.showAssignModal('${post.id}', '${key}')">+ adicionar</button>`;
+          : `${coverHtml}<button class="slot-add" onclick="app.showAssignModal('${post.id}', '${key}')">+ adicionar</button>`;
       const weekly = WEEKLY_TURNOS.includes(vaga.turno) ? ` <small class="weekly-tag">· semanal ${vagaTurnoLabel(vaga, true).match(/\((.*)\)/)[1]}</small>` : '';
-      return `<tr class="${holder ? '' : 'empty'}${outOfScale ? ' out' : ''}${dupla ? ' is-dupla' : ''}"><td class="slot-label">${outOfScale ? '⚠️ ' : ''}${vagaTurnoLabel(vaga)}${weekly}</td><td class="slot-cell">${cell}</td></tr>`;
+      return `<tr class="${holder ? '' : (covers.length ? 'covered' : 'empty')}${outOfScale ? ' out' : ''}${dupla ? ' is-dupla' : ''}"><td class="slot-label">${outOfScale ? '⚠️ ' : ''}${vagaTurnoLabel(vaga)}${weekly}</td><td class="slot-cell">${cell}</td></tr>`;
     }).join('') + `<tr class="empty"><td class="slot-cell" colspan="2"><button class="slot-add slot-add-custom" onclick="app.showAssignModal('${post.id}', '__custom__')">+ vaga com dias escolhidos</button></td></tr>`;
 
     // Today's shifts with who is on duty
