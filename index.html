@@ -163,6 +163,12 @@
                 </select>
             </div>
 
+            <div class="form-group">
+                <label class="form-label" for="new-post-start">Começa a operar em (opcional)</label>
+                <input type="date" id="new-post-start" class="form-input">
+                <small class="form-note">Posto novo que ainda não abriu: dá para montar a escala antes, sem gerar alerta nem choque até essa data.</small>
+            </div>
+
             <div class="form-group" id="group-alert-diurno">
                 <label class="form-label" for="new-post-alert-diurno">Horário de Alerta - Diurno (turno 07h–19h)</label>
                 <input type="time" id="new-post-alert-diurno" class="form-input" value="05:00">
@@ -305,6 +311,20 @@
             <div class="confirm-actions">
                 <button id="confirm-no" class="btn-secondary">Cancelar</button>
                 <button id="confirm-yes" class="btn-danger">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MONTH TURN (31st → 1st) DIALOG ===== -->
+    <div id="parity-overlay" class="modal-overlay">
+        <div class="confirm-box parity-box">
+            <p id="parity-message" class="confirm-message"></p>
+            <div class="parity-options">
+                <button id="parity-keep" class="parity-option"></button>
+                <button id="parity-swap" class="parity-option"></button>
+            </div>
+            <div class="confirm-actions">
+                <button id="parity-cancel" class="btn-secondary">Cancelar</button>
             </div>
         </div>
     </div>

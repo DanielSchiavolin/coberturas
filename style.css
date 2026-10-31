@@ -1861,3 +1861,27 @@ body {
 .filter-chip { color: #FFFFFF; }
 .form-label { color: #FFFFFF; }
 .form-input, .form-select { color: #FFFFFF; border-color: rgba(255, 255, 255, 0.35); }
+
+/* new post: start date */
+.form-note { display: block; margin-top: 6px; font-size: 0.78rem; color: rgba(255, 255, 255, 0.7); }
+.post-start { color: #F8C471; font-weight: 800; }
+
+/* month turn (31st → 1st): par/ímpar question */
+.parity-box { max-width: 420px; text-align: left; }
+.parity-box .confirm-message { line-height: 1.45; }
+.parity-options { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.parity-option {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid rgba(255, 213, 79, 0.6);
+  border-radius: 10px;
+  background: rgba(255, 213, 79, 0.1);
+  color: #FFFFFF;
+  font-weight: 800;
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+}
+.parity-option:hover { background: rgba(255, 213, 79, 0.22); }
+.parity-option small { display: block; margin-top: 4px; font-weight: 600; font-size: 0.8rem; color: rgba(255, 255, 255, 0.8); }

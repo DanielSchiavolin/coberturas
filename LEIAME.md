@@ -27,6 +27,10 @@ Cada posto tem uma **tabela de vagas** e cada vaga aceita **um QRA só** (para t
 - **Diurno**: Diurno (todos os dias de funcionamento)
 
 Par/ímpar = **12x36 alternado contínuo**: quem trabalha num dia folga no seguinte, sem exceção (quem trabalhou dia 31 folga dia 1). Em outubro/2026 a turma "par" trabalhou os dias pares; depois disso ela só alterna, então em alguns meses a turma "par" cai nos dias ímpares. O selo "HOJE" na tabela mostra quem está de serviço.
+
+**Virada de mês com dia 31**: quando faltam poucos dias para a inversão (ou o posto só começa depois dela), ao colocar alguém numa vaga par/ímpar o app pergunta se você está considerando a inversão. "Não" mantém a turma de agora; "Sim" coloca na outra turma, para ficar nos dias pares/ímpares do mês seguinte. Cada opção mostra os dias reais que a pessoa vai trabalhar, e o choque/dobra é verificado já com a escala escolhida.
+
+**Posto novo que ainda não abriu**: preencha "Começa a operar em" no cadastro do posto. Dá para montar a escala antes (ex.: dia 29 para um posto que abre dia 03); até essa data o posto não gera alerta nem choque de escala.
 O "+ adicionar" da vaga já sabe o posto e o turno: basta escolher alguém da reserva ou digitar um nome novo.
 
 **Escala dupla**: ao colocar numa vaga um QRA que já tem outra vaga (no mesmo posto ou em outro), o app pergunta "É ESCALA DUPLA?". Se houver choque de horário, recusa; se houver dobra (turno colado), avisa. Confirmando, o QRA aparece com o selo **2× ESCALA DUPLA** nas duas vagas e na lista, e qualquer cobertura para onde ele for mandado é verificada contra as duas escalas. O ✕ tira só aquela vaga.
