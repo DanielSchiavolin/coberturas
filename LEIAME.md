@@ -26,9 +26,9 @@ Cada posto tem uma **tabela de vagas** e cada vaga aceita **um QRA só** (para t
 - **Híbrido**: Diurno seg–sex (se houver) · Diurno sábado · Diurno domingo · Noturno par · Noturno ímpar
 - **Diurno**: Diurno (todos os dias de funcionamento)
 
-Par/ímpar = **12x36 alternado contínuo**: quem trabalha num dia folga no seguinte, sem exceção (quem trabalhou dia 31 folga dia 1). Em outubro/2026 a turma "par" trabalhou os dias pares; depois disso ela só alterna, então em alguns meses a turma "par" cai nos dias ímpares. O selo "HOJE" na tabela mostra quem está de serviço.
+Par/ímpar = **12x36 alternado contínuo**: quem trabalha num dia folga no seguinte, sem exceção (quem trabalhou dia 31 folga dia 1). O nome da vaga segue os dias do mês: quando um mês termina no dia 31, as turmas invertem no dia 1 e o nome troca junto (quem era "Noturno par" em outubro aparece como "Noturno ímpar" em novembro, porque passa a trabalhar os dias ímpares). Uma semana antes da virada a tabela avisa ("ímpar a partir de 01/11"). Posto que ainda não abriu já mostra os nomes do mês em que começa. O selo "HOJE" na tabela mostra quem está de serviço.
 
-**Virada de mês com dia 31**: quando faltam poucos dias para a inversão (ou o posto só começa depois dela), ao colocar alguém numa vaga par/ímpar o app pergunta se você está considerando a inversão. "Não" mantém a turma de agora; "Sim" coloca na outra turma, para ficar nos dias pares/ímpares do mês seguinte. Cada opção mostra os dias reais que a pessoa vai trabalhar, e o choque/dobra é verificado já com a escala escolhida.
+**Virada de mês com dia 31**: quando faltam poucos dias para a inversão (ou o posto só começa depois dela), ao colocar alguém numa vaga par/ímpar o app pergunta se você está considerando a inversão. "Não" usa os dias pares/ímpares do mês que está acabando; "Sim" usa os dias pares/ímpares do mês seguinte. Cada opção mostra os dias reais que a pessoa vai trabalhar, e o choque/dobra é verificado já com a escala escolhida.
 
 **Posto novo que ainda não abriu**: preencha "Começa a operar em" no cadastro do posto. Dá para montar a escala antes (ex.: dia 29 para um posto que abre dia 03); até essa data o posto não gera alerta nem choque de escala.
 O "+ adicionar" da vaga já sabe o posto e o turno: basta escolher alguém da reserva ou digitar um nome novo.
