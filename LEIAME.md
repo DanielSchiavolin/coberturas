@@ -38,6 +38,7 @@ O "+ adicionar" da vaga já sabe o posto e o turno: basta escolher alguém da re
 ## Alertas
 - Card **pisca** (igual ao QTI) com "🚨 PRECISA DE COBERTURA" + data e turno sempre que houver folga sem cobertura nos próximos 7 dias ou turno de fim de semana vago em posto híbrido (a partir de segunda).
 - Botão 📱 exporta para o WhatsApp: 🟢 titular · 🟡 cobertura · 🔴 sem cobertura · ⚪ ninguém escalado, mais a lista do que precisa de cobertura.
+- **📱 → 🗂️ Escala geral**: todos os postos com quem está em cada vaga (par/ímpar, "todo dia" quando a mesma pessoa tem par e ímpar, dias escolhidos, sábado/domingo da semana, escala dupla com onde mais trabalha, vagas abertas), os **avulsos** dos próximos 7 dias (coberturas com quem está sendo coberto, pedidos a definir, folgas) e a **reserva**.
 
 ## Configuração (uma vez)
 1. Criar um projeto novo no [Firebase Console](https://console.firebase.google.com) (ex.: `front-security-coberturas`).

@@ -31,7 +31,7 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-10-31.2';
+const APP_VERSION = '2026-11-17.1';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
@@ -2154,6 +2154,112 @@ class CoberturasApp {
     return msg;
   }
 
+  // Escala geral: every post with who holds each vaga (par/ímpar, chosen days, weekend, dupla),
+  // then the avulsos of the next days (coberturas, pedidos, folgas) and the reserve QRAs
+  buildEscalaGeralMessage(days = ALERT_DAYS_AHEAD) {
+    const s = this.sched;
+    const today = todayStr();
+    const now = new Date();
+    const line = '━━━━━━━━━━━━━━━━━━━━━';
+    const fmt = d => d.split('-').reverse().slice(0, 2).join('/');
+    const dayLabel = d => `${DAY_NAMES[parseDate(d).getDay()]} ${fmt(d)}`;
+    const month = parseDate(today).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    let msg = `🛡️ *FRONT SECURITY — ESCALA GERAL*\n📅 ${month} · gerada ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}\n${line}\n`;
+
+    const qraDaysTxt = q => Array.isArray(q.days) && q.days.length && q.days.length < 7
+      ? ` (só ${q.days.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(d => DAY_NAMES[d].toLowerCase()).join(', ')})` : '';
+
+    this.postsByCategory().forEach(([cat, posts]) => {
+      msg += `\n${CATEGORY_ICONS[cat] || '📍'} *${cat.toUpperCase()}*\n`;
+      posts.forEach(post => {
+        const ld = s.labelDate(post.id);
+        const flip = nextParityFlip(ld, addDays(ld, 7));
+        const keys = s.postVagaKeys(post);
+        if (turmaDayParity(0, ld) === 1) {
+          ['diurno', 'noturno'].forEach(sh => {
+            const a = keys.indexOf(`${sh}_par`);
+            const b = keys.indexOf(`${sh}_impar`);
+            if (a >= 0 && b >= 0) [keys[a], keys[b]] = [keys[b], keys[a]];
+          });
+        }
+        const filled = keys.filter(k => s.slotHolder(post.id, k));
+        // same QRA on par AND ímpar of one shift = works every day: one line
+        const merged = {};
+        ['diurno', 'noturno'].forEach(sh => {
+          const p = s.slotHolder(post.id, `${sh}_par`);
+          if (p && p === s.slotHolder(post.id, `${sh}_impar`)) merged[sh] = p;
+        });
+        const rows = keys.map(key => {
+          const vaga = this.vagaForSlot(post, key);
+          const def = QRA_TURNOS[vaga.turno] || { shifts: [] };
+          const holder = s.slotHolder(post.id, key);
+          const pairSh = Number.isInteger(def.parity) && merged[def.shifts[0]] === holder && holder ? def.shifts[0] : null;
+          if (pairSh && key !== keys.find(k => k === `${pairSh}_par` || k === `${pairSh}_impar`)) return null;
+          // alternative vagas of a post (diurno x diurno par/ímpar): only list what is in use
+          if (!holder && (s.overlapHolders(vaga)[0] || (post.escalaType === 'diurno' && key !== 'diurno' && !filled.length))) return null;
+          const label = pairSh ? `${SHIFT_LABEL[pairSh]} todo dia (par + ímpar)` : this.turnoLabel(vaga, true);
+          const flipTxt = Number.isInteger(def.parity) && flip && !pairSh ? ` _(vira ${turmaDayParity(def.parity, flip) === 0 ? 'par' : 'ímpar'} em ${fmt(flip)})_` : '';
+          if (!holder) {
+            const covers = s.vagaCoberturas(post, vaga);
+            return covers.length
+              ? `  🟡 ${label}: vaga aberta · 🔁 ${covers.map(c => `${c.cob.qraName} ${dayLabel(c.date)}`).join(', ')}`
+              : `  ⚪ ${label}: *vaga aberta*`;
+          }
+          // escala dupla: say where else this QRA works
+          const others = s.qraVagas(holder).filter(v => !(v.postId === post.id && (this.sched.vagaKey(v) === key
+            || (pairSh && [`${pairSh}_par`, `${pairSh}_impar`].includes(v.turno)))));
+          const dupla = others.length ? ` · 2× também ${others.map(v => v.postId === post.id ? this.turnoLabel(v, true) : this.vagaLabel(v)).join(' + ')}` : '';
+          const onToday = (pairSh ? [`${pairSh}_par`, `${pairSh}_impar`].map(k => this.vagaForSlot(post, k)) : [vaga])
+            .some(v => (QRA_TURNOS[v.turno] || { shifts: [] }).shifts.some(sh => s.vagaScheduled(v, today, sh))) && !s.folgaOf(holder.id, today) ? ' ✅hoje' : '';
+          return `  🟢 ${label}: *${holder.name}*${qraDaysTxt(holder)}${dupla}${onToday}${flipTxt}`;
+        }).filter(Boolean);
+        const start = post.startDate && post.startDate > today ? ` · começa ${fmt(post.startDate)}` : '';
+        msg += `\n📍 *${post.name}* (${postHoursLabel(post)}${start})\n${rows.join('\n') || '  ⚪ sem vagas'}\n`;
+      });
+    });
+
+    // Avulsos: one-off coberturas, pending requests and folgas of the next days
+    const end = addDays(today, days);
+    const cobs = Object.values(s.coberturas)
+      .filter(c => s.posts[c.postId] && c.date >= addDays(today, -1) && c.date <= end
+        && !slotEnded(s.posts[c.postId], c.date, shiftsOf(c.turno).slice(-1)[0] || 'diurno'))
+      .sort((a, b) => (a.date + a.turno).localeCompare(b.date + b.turno));
+    const folgas = Object.values(s.folgas).filter(f => f.date >= today && f.date <= end)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    msg += `\n${line}\n📌 *AVULSOS — próximos ${days} dias*\n`;
+    if (!cobs.length && !folgas.length) msg += '  Nenhum\n';
+    const dates = [...new Set([...cobs.map(c => c.date), ...folgas.map(f => f.date)])].sort();
+    dates.forEach(d => {
+      msg += `\n🗓️ *${dayLabel(d)}*\n`;
+      cobs.filter(c => c.date === d).forEach(c => {
+        const post = s.posts[c.postId];
+        const turno = SHIFT_LABEL[c.turno] || c.turno;
+        // titulares this cobertura replaces (its vaga's holder, or whoever is on folga)
+        const sh = shiftsOf(c.turno)[0] || 'diurno';
+        const covered = c.pending ? [] : s.slotStatus(post, c.date, sh).titulares
+          .filter(q => s.qraVagasOn(q, c.date, sh, post.id).some(v => s.releaseCover(q, v, c.date, sh) === c) || s.folgaOf(q.id, c.date));
+        msg += c.pending
+          ? `  🔴 ${turno} — ${post.name}: ⏳ *a definir*\n`
+          : `  🔁 ${turno} — ${post.name}: *${c.qraName}*${c.qraId ? '' : ' (temporário)'}${covered.length ? ` cobrindo ${covered.map(q => q.name).join(', ')}` : ''}\n`;
+      });
+      folgas.filter(f => f.date === d).forEach(f => {
+        const q = s.qras[f.qraId];
+        msg += `  🏖️ Folga: ${q ? q.name : '?'}\n`;
+      });
+    });
+
+    const reserva = Object.values(s.qras).filter(q => !s.qraVagas(q).length).map(q => q.name).sort((a, b) => a.localeCompare(b));
+    msg += `\n${line}\n🔄 *RESERVA* (${reserva.length})\n${reserva.length ? `  ${reserva.join(' · ')}` : '  Nenhum'}\n`;
+    msg += `${line}\n🟢 titular · ⚪ vaga aberta · 🔁 cobertura · 🔴 a definir · 🏖️ folga\nPar/ímpar = dias do mês em que trabalha (12x36).`;
+    return msg;
+  }
+
+  exportEscalaGeral() {
+    if (!this.loaded.posts) return this.showToast('Aguarde carregar os dados', 'error');
+    this.hideModal('export-modal');
+    window.open(`https://wa.me/?text=${encodeURIComponent(this.buildEscalaGeralMessage())}`, '_blank');
+  }
+
   exportEscala() {
     const date = document.getElementById('export-date').value;
     if (!date) return this.showToast('Escolha a data do noturno', 'error');
@@ -2241,6 +2347,7 @@ class CoberturasApp {
     on('export-date', 'change', () => this.updateExportRange());
     on('export-escala-btn', 'click', () => this.exportEscala());
     on('export-cob-btn', 'click', () => { this.hideModal('export-modal'); this.exportWhatsApp(); });
+    on('export-geral-btn', 'click', () => this.exportEscalaGeral());
     on('qra-search', 'input', () => this.renderQraList());
     this.qraFilter = {};
     document.querySelectorAll('#qra-filters .filter-group').forEach(group => {
