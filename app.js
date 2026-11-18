@@ -31,7 +31,7 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-11-17.1';
+const APP_VERSION = '2026-11-18.1';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
@@ -2211,7 +2211,7 @@ class CoberturasApp {
           const dupla = others.length ? ` · 2× também ${others.map(v => v.postId === post.id ? this.turnoLabel(v, true) : this.vagaLabel(v)).join(' + ')}` : '';
           const onToday = (pairSh ? [`${pairSh}_par`, `${pairSh}_impar`].map(k => this.vagaForSlot(post, k)) : [vaga])
             .some(v => (QRA_TURNOS[v.turno] || { shifts: [] }).shifts.some(sh => s.vagaScheduled(v, today, sh))) && !s.folgaOf(holder.id, today) ? ' ✅hoje' : '';
-          return `  🟢 ${label}: *${holder.name}*${qraDaysTxt(holder)}${dupla}${onToday}${flipTxt}`;
+          return `  ${label}: *${holder.name}*${qraDaysTxt(holder)}${dupla}${onToday}${flipTxt}`;
         }).filter(Boolean);
         const start = post.startDate && post.startDate > today ? ` · começa ${fmt(post.startDate)}` : '';
         msg += `\n📍 *${post.name}* (${postHoursLabel(post)}${start})\n${rows.join('\n') || '  ⚪ sem vagas'}\n`;
@@ -2250,8 +2250,9 @@ class CoberturasApp {
 
     const reserva = Object.values(s.qras).filter(q => !s.qraVagas(q).length).map(q => q.name).sort((a, b) => a.localeCompare(b));
     msg += `\n${line}\n🔄 *RESERVA* (${reserva.length})\n${reserva.length ? `  ${reserva.join(' · ')}` : '  Nenhum'}\n`;
-    msg += `${line}\n🟢 titular · ⚪ vaga aberta · 🔁 cobertura · 🔴 a definir · 🏖️ folga\nPar/ímpar = dias do mês em que trabalha (12x36).`;
-    return msg;
+    msg += `${line}\n⚪ vaga aberta · 🔁 cobertura · 🔴 a definir · 🏖️ folga\nPar/ímpar = dias do mês em que trabalha (12x36).`;
+    // no sun/moon icons in this export (Diurno/Noturno already say the shift)
+    return msg.replace(/(☀️?|\u{1F319}) ?/gu, '');
   }
 
   exportEscalaGeral() {
