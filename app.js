@@ -31,14 +31,15 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-11-18.1';
+const APP_VERSION = '2026-11-19.1';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
 const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const SHIFT_LABEL = { diurno: '☀️ Diurno', noturno: '🌙 Noturno', '24h': '🔄 24h' };
 // QRA slots (vagas). Each post has a fixed set of slots and each slot holds ONE QRA.
-// parity: 12x36 by day of the month (0 = even days, 1 = odd days) · dows: weekdays the slot works
+// parity: 12x36 turma (0 = worked the even days of 2026-10, 1 = the odd days; the par/ímpar name shown
+// follows the days of the current month, see turmaDayParity) · dows: weekdays the slot works
 const QRA_TURNOS = {
   diurno: { label: '☀️ Diurno todo dia', short: '☀️', shifts: ['diurno'], parity: null },
   diurno_par: { label: '☀️ Diurno par', short: '☀️P', shifts: ['diurno'], parity: 0 },
@@ -179,15 +180,36 @@ function turmaDayParity(turma, date) {
   return alternationParity(date) === turma ? dom % 2 : 1 - (dom % 2);
 }
 
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+
+// "2026-11-03" -> "03/11"
+function ddmm(date) {
+  return date.split('-').reverse().slice(0, 2).join('/');
+}
+
+// [5, 1, 3] -> "seg, qua, sex" (monday first)
+function dowsLabel(dows) {
+  return dows.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(d => DAY_NAMES[d].toLowerCase()).join(', ');
+}
+
+// "par" or "ímpar": days a turma works in the month of `date`
+function turmaName(turma, date) {
+  return turmaDayParity(turma, date) === 0 ? 'par' : 'ímpar';
+}
+
+// diurno_par <-> diurno_impar, noturno_par <-> noturno_impar
+function siblingTurno(turno) {
+  return turno.endsWith('_par') ? turno.replace(/_par$/, '_impar') : turno.replace(/_impar$/, '_par');
+}
+
 // Name of a vaga; par/ímpar named by the days it works in the month of `date`
 function vagaTurnoLabel(v, withWeek, date = todayStr()) {
   const def = QRA_TURNOS[v.turno];
   if (!def) return v.turno;
-  if (def.parity !== null) return `${def.label.replace(/ (par|ímpar)$/, '')} ${turmaDayParity(def.parity, date) === 0 ? 'par' : 'ímpar'}`;
-  if (def.custom) return `${def.label} ${(v.dows || []).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(d => DAY_NAMES[d].toLowerCase()).join(', ')}`;
+  if (def.parity !== null) return `${def.label.replace(/ (par|ímpar)$/, '')} ${turmaName(def.parity, date)}`;
+  if (def.custom) return `${def.label} ${dowsLabel(v.dows || [])}`;
   if (withWeek && WEEKLY_TURNOS.includes(v.turno) && v.weekOf) {
-    const day = addDays(v.weekOf, v.turno === 'diurno_sabado' ? 5 : 6);
-    return `${def.label} (${day.split('-').reverse().slice(0, 2).join('/')})`;
+    return `${def.label} (${ddmm(addDays(v.weekOf, v.turno === 'diurno_sabado' ? 5 : 6))})`;
   }
   return def.label;
 }
@@ -343,11 +365,35 @@ class Schedule {
     return this.qraVagas(qra).length > 1;
   }
 
+  // Post that only starts operating after `date`
+  notStarted(post, date = todayStr()) {
+    return !!(post && post.startDate && post.startDate > date);
+  }
+
   // Date whose month names the par/ímpar vagas of a post: today, or its opening day if later
   labelDate(postId) {
     const post = this.posts[postId];
-    const today = todayStr();
-    return post && post.startDate && post.startDate > today ? post.startDate : today;
+    return this.notStarted(post) ? post.startDate : todayStr();
+  }
+
+  // Next day the par/ímpar names swap (1st after a month ending on the 31st), looking from `from`
+  // (default: the post's label date) up to a week past the label date; null if none
+  upcomingFlip(postId, from) {
+    const ld = this.labelDate(postId);
+    return nextParityFlip(from || ld, addDays(ld, 7));
+  }
+
+  // Vaga keys of a post in display order: par/ímpar rows by their current names (par first)
+  orderedVagaKeys(post) {
+    const keys = this.postVagaKeys(post);
+    if (turmaDayParity(0, this.labelDate(post.id)) === 1) {
+      ['diurno', 'noturno'].forEach(sh => {
+        const a = keys.indexOf(`${sh}_par`);
+        const b = keys.indexOf(`${sh}_impar`);
+        if (a >= 0 && b >= 0) [keys[a], keys[b]] = [keys[b], keys[a]];
+      });
+    }
+    return keys;
   }
 
   // Week whose weekend is the next one not over yet (weekly vagas are filled for it)
@@ -1029,9 +1075,9 @@ class CoberturasApp {
     const s = this.sched;
     const today = todayStr();
     const todayType = s.postShiftOn(post, today);
-    const notStarted = !!(post.startDate && post.startDate > today);
+    const notStarted = s.notStarted(post, today);
     // par/ímpar names swap on the 1st after a month ending on the 31st: tell it a week ahead
-    const flip = nextParityFlip(s.labelDate(post.id), addDays(s.labelDate(post.id), 7));
+    const flip = s.upcomingFlip(post.id);
     const slots = s.postSlots(post);
 
     const badgeLabel = post.escalaType === 'hibrido'
@@ -1039,15 +1085,7 @@ class CoberturasApp {
       : ({ diurno: 'Diurno', noturno: 'Noturno', '24h': '24h' }[post.escalaType] || '');
 
     // Slot table: one row per vaga, one QRA per vaga (QRAs outside the escala are listed with a warning)
-    const keys = s.postVagaKeys(post);
-    // par/ímpar rows in the order of their current names (par first)
-    if (turmaDayParity(0, s.labelDate(post.id)) === 1) {
-      ['diurno', 'noturno'].forEach(sh => {
-        const a = keys.indexOf(`${sh}_par`);
-        const b = keys.indexOf(`${sh}_impar`);
-        if (a >= 0 && b >= 0) [keys[a], keys[b]] = [keys[b], keys[a]];
-      });
-    }
+    const keys = s.orderedVagaKeys(post);
     const rows = keys.map(key => {
       const vaga = this.vagaForSlot(post, key);
       const def = QRA_TURNOS[vaga.turno] || { label: key, shifts: [] };
@@ -1072,7 +1110,7 @@ class CoberturasApp {
           : `${coverHtml}<button class="slot-add" onclick="app.showAssignModal('${post.id}', '${key}')">+ adicionar</button>`;
       const weekly = WEEKLY_TURNOS.includes(vaga.turno) ? ` <small class="weekly-tag">· semanal ${this.turnoLabel(vaga, true).match(/\((.*)\)/)[1]}</small>` : '';
       const flipTag = Number.isInteger(def.parity) && flip
-        ? ` <small class="weekly-tag">· ${turmaDayParity(def.parity, flip) === 0 ? 'par' : 'ímpar'} a partir de ${flip.split('-').reverse().slice(0, 2).join('/')}</small>` : '';
+        ? ` <small class="weekly-tag">· ${turmaName(def.parity, flip)} a partir de ${ddmm(flip)}</small>` : '';
       return `<tr class="${holder ? '' : (covers.length ? 'covered' : 'empty')}${outOfScale ? ' out' : ''}${dupla ? ' is-dupla' : ''}"><td class="slot-label">${outOfScale ? '⚠️ ' : ''}${this.turnoLabel(vaga)}${weekly}${flipTag}</td><td class="slot-cell">${cell}</td></tr>`;
     }).join('') + `<tr class="empty"><td class="slot-cell" colspan="2"><button class="slot-add slot-add-custom" onclick="app.showAssignModal('${post.id}', '__custom__')">+ vaga com dias escolhidos</button></td></tr>`;
 
@@ -1515,7 +1553,6 @@ class CoberturasApp {
     const key = document.getElementById('qra-turno').value;
     const name = document.getElementById('qra-name').value.trim();
     const phone = document.getElementById('qra-phone').value.trim();
-    const allDays = [0, 1, 2, 3, 4, 5, 6];
 
     if (editId) {
       if (!name) return this.showToast('Informe o nome do QRA', 'error');
@@ -1558,7 +1595,7 @@ class CoberturasApp {
     if (dup) return this.showToast(`Já existe um QRA chamado "${dup.name}"`, 'error');
     const id = makeId(name);
     this.hideModal('qra-modal');
-    return this.write(this.firebase.set(`qras/${id}`, { id, name, postId: '', turno: '', days: allDays, phone }), `QRA ${name} cadastrado na reserva`);
+    return this.write(this.firebase.set(`qras/${id}`, { id, name, postId: '', turno: '', days: ALL_DAYS, phone }), `QRA ${name} cadastrado na reserva`);
   }
 
   // Par/ímpar vaga filled shortly before a month ending on the 31st (or for a post opening after
@@ -1570,11 +1607,10 @@ class CoberturasApp {
     const def = QRA_TURNOS[vaga.turno];
     const today = todayStr();
     const ref = s.labelDate(post.id);
-    const flip = def && def.parity !== null ? nextParityFlip(today, addDays(ref, 7)) : null;
-    const otherKey = flip && Object.keys(QRA_TURNOS).find(k => QRA_TURNOS[k].parity === 1 - def.parity
-      && !QRA_TURNOS[k].dows && QRA_TURNOS[k].shifts.join() === def.shifts.join());
-    if (!flip || !otherKey) return proceed(vaga);
-    const other = { ...vaga, turno: otherKey };
+    // looks from today: a post opening after the flip is asked too
+    const flip = def && def.parity !== null ? s.upcomingFlip(post.id, today) : null;
+    if (!flip) return proceed(vaga);
+    const other = { ...vaga, turno: siblingTurno(vaga.turno) };
 
     const last = addDays(flip, -1);
     // days named by the row clicked (in the month of `ref`), and the turma working them each month
@@ -1584,7 +1620,6 @@ class CoberturasApp {
     const withInversion = turmaIn(flip);
     const parName = days === 0 ? 'pares' : 'ímpares';
     const month = d => parseDate(d).toLocaleDateString('pt-BR', { month: 'long' });
-    const ddmm = d => d.split('-').reverse().slice(0, 2).join('/');
     const shift = def.shifts[0];
     const datesOf = v => {
       const out = [];
@@ -1603,7 +1638,7 @@ class CoberturasApp {
     };
     const curMonth = month(last);
     const nextMonth = month(flip);
-    const opens = post.startDate && post.startDate > today ? ` (posto começa ${ddmm(post.startDate)})` : '';
+    const opens = s.notStarted(post, today) ? ` (posto começa ${ddmm(post.startDate)})` : '';
 
     document.getElementById('parity-message').innerHTML =
       `📅 <strong>Virada de mês: ${esc(curMonth)} termina no dia ${parseDate(last).getDate()}.</strong><br>`
@@ -1648,7 +1683,7 @@ class CoberturasApp {
     }
     const id = makeId(name);
     this.hideModal('qra-modal');
-    return this.write(this.firebase.set(`qras/${id}`, { id, name, days: [0, 1, 2, 3, 4, 5, 6], phone, ...this.vagasToStore([vaga]) }),
+    return this.write(this.firebase.set(`qras/${id}`, { id, name, days: ALL_DAYS, phone, ...this.vagasToStore([vaga]) }),
       `${name} na vaga ${label}${vaga.weekOf ? ' (só esse fim de semana)' : ''}`);
   }
 
@@ -2137,7 +2172,6 @@ class CoberturasApp {
     const s = this.sched;
     const next = addDays(date, 1);
     const line = '━━━━━━━━━━━━━━━━━━━━━';
-    const fmt = d => d.split('-').reverse().slice(0, 2).join('/');
     const block = (shift, day) => this.postsByCategory().map(([cat, posts]) => {
       const rows = posts.filter(p => s.postWorks(p, day, shift)).map(p => {
         const { dot, text } = this.dutyLine(p, day, shift);
@@ -2148,8 +2182,8 @@ class CoberturasApp {
     }).filter(Boolean).join('\n\n');
     const dn = d => DAY_NAMES[parseDate(d).getDay()];
     let msg = `🛡️ *FRONT SECURITY — ESCALA*\n${line}\n\n`;
-    msg += `🌙 *NOTURNO — ${dn(date)} ${fmt(date)}* (19h → 07h de ${fmt(next)})\n\n${block('noturno', date) || '  (nenhum posto)'}\n\n${line}\n\n`;
-    msg += `☀️ *DIURNO — ${dn(next)} ${fmt(next)}* (07h → 19h)\n\n${block('diurno', next) || '  (nenhum posto)'}\n\n${line}\n`;
+    msg += `🌙 *NOTURNO — ${dn(date)} ${ddmm(date)}* (19h → 07h de ${ddmm(next)})\n\n${block('noturno', date) || '  (nenhum posto)'}\n\n${line}\n\n`;
+    msg += `☀️ *DIURNO — ${dn(next)} ${ddmm(next)}* (07h → 19h)\n\n${block('diurno', next) || '  (nenhum posto)'}\n\n${line}\n`;
     msg += '🟢 titular · 🟡 cobertura · 🔴 sem cobertura · ⚪ ninguém escalado';
     return msg;
   }
@@ -2161,44 +2195,39 @@ class CoberturasApp {
     const today = todayStr();
     const now = new Date();
     const line = '━━━━━━━━━━━━━━━━━━━━━';
-    const fmt = d => d.split('-').reverse().slice(0, 2).join('/');
-    const dayLabel = d => `${DAY_NAMES[parseDate(d).getDay()]} ${fmt(d)}`;
+    const dayLabel = d => `${DAY_NAMES[parseDate(d).getDay()]} ${ddmm(d)}`;
     const month = parseDate(today).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     let msg = `🛡️ *FRONT SECURITY — ESCALA GERAL*\n📅 ${month} · gerada ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}\n${line}\n`;
 
     const qraDaysTxt = q => Array.isArray(q.days) && q.days.length && q.days.length < 7
-      ? ` (só ${q.days.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(d => DAY_NAMES[d].toLowerCase()).join(', ')})` : '';
+      ? ` (só ${dowsLabel(q.days)})` : '';
 
     this.postsByCategory().forEach(([cat, posts]) => {
       msg += `\n${CATEGORY_ICONS[cat] || '📍'} *${cat.toUpperCase()}*\n`;
       posts.forEach(post => {
-        const ld = s.labelDate(post.id);
-        const flip = nextParityFlip(ld, addDays(ld, 7));
-        const keys = s.postVagaKeys(post);
-        if (turmaDayParity(0, ld) === 1) {
-          ['diurno', 'noturno'].forEach(sh => {
-            const a = keys.indexOf(`${sh}_par`);
-            const b = keys.indexOf(`${sh}_impar`);
-            if (a >= 0 && b >= 0) [keys[a], keys[b]] = [keys[b], keys[a]];
-          });
-        }
+        const flip = s.upcomingFlip(post.id);
+        const keys = s.orderedVagaKeys(post);
         const filled = keys.filter(k => s.slotHolder(post.id, k));
-        // same QRA on par AND ímpar of one shift = works every day: one line
-        const merged = {};
+        // same QRA on par AND ímpar of one shift = works every day: one line (at the first of the pair)
+        const pairOf = {};
         ['diurno', 'noturno'].forEach(sh => {
           const p = s.slotHolder(post.id, `${sh}_par`);
-          if (p && p === s.slotHolder(post.id, `${sh}_impar`)) merged[sh] = p;
+          if (p && p === s.slotHolder(post.id, `${sh}_impar`)) pairOf[`${sh}_par`] = pairOf[`${sh}_impar`] = sh;
         });
+        const listedPairs = new Set();
+        const worksToday = vagas => vagas.some(v => (QRA_TURNOS[v.turno] || { shifts: [] }).shifts.some(sh => s.vagaScheduled(v, today, sh)));
         const rows = keys.map(key => {
+          const pairSh = pairOf[key] || null;
+          if (pairSh && listedPairs.has(pairSh)) return null;
+          if (pairSh) listedPairs.add(pairSh);
+          const rowKeys = pairSh ? [`${pairSh}_par`, `${pairSh}_impar`] : [key];
           const vaga = this.vagaForSlot(post, key);
           const def = QRA_TURNOS[vaga.turno] || { shifts: [] };
           const holder = s.slotHolder(post.id, key);
-          const pairSh = Number.isInteger(def.parity) && merged[def.shifts[0]] === holder && holder ? def.shifts[0] : null;
-          if (pairSh && key !== keys.find(k => k === `${pairSh}_par` || k === `${pairSh}_impar`)) return null;
           // alternative vagas of a post (diurno x diurno par/ímpar): only list what is in use
           if (!holder && (s.overlapHolders(vaga)[0] || (post.escalaType === 'diurno' && key !== 'diurno' && !filled.length))) return null;
           const label = pairSh ? `${SHIFT_LABEL[pairSh]} todo dia (par + ímpar)` : this.turnoLabel(vaga, true);
-          const flipTxt = Number.isInteger(def.parity) && flip && !pairSh ? ` _(vira ${turmaDayParity(def.parity, flip) === 0 ? 'par' : 'ímpar'} em ${fmt(flip)})_` : '';
+          const flipTxt = Number.isInteger(def.parity) && flip && !pairSh ? ` _(vira ${turmaName(def.parity, flip)} em ${ddmm(flip)})_` : '';
           if (!holder) {
             const covers = s.vagaCoberturas(post, vaga);
             return covers.length
@@ -2206,14 +2235,12 @@ class CoberturasApp {
               : `  ⚪ ${label}: *vaga aberta*`;
           }
           // escala dupla: say where else this QRA works
-          const others = s.qraVagas(holder).filter(v => !(v.postId === post.id && (this.sched.vagaKey(v) === key
-            || (pairSh && [`${pairSh}_par`, `${pairSh}_impar`].includes(v.turno)))));
+          const others = s.qraVagas(holder).filter(v => !(v.postId === post.id && rowKeys.includes(s.vagaKey(v))));
           const dupla = others.length ? ` · 2× também ${others.map(v => v.postId === post.id ? this.turnoLabel(v, true) : this.vagaLabel(v)).join(' + ')}` : '';
-          const onToday = (pairSh ? [`${pairSh}_par`, `${pairSh}_impar`].map(k => this.vagaForSlot(post, k)) : [vaga])
-            .some(v => (QRA_TURNOS[v.turno] || { shifts: [] }).shifts.some(sh => s.vagaScheduled(v, today, sh))) && !s.folgaOf(holder.id, today) ? ' ✅hoje' : '';
+          const onToday = worksToday(rowKeys.map(k => this.vagaForSlot(post, k))) && !s.folgaOf(holder.id, today) ? ' ✅hoje' : '';
           return `  ${label}: *${holder.name}*${qraDaysTxt(holder)}${dupla}${onToday}${flipTxt}`;
         }).filter(Boolean);
-        const start = post.startDate && post.startDate > today ? ` · começa ${fmt(post.startDate)}` : '';
+        const start = s.notStarted(post, today) ? ` · começa ${ddmm(post.startDate)}` : '';
         msg += `\n📍 *${post.name}* (${postHoursLabel(post)}${start})\n${rows.join('\n') || '  ⚪ sem vagas'}\n`;
       });
     });
