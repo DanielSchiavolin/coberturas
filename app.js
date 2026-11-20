@@ -31,7 +31,7 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-11-20.1';
+const APP_VERSION = '2026-11-20.2';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
@@ -1861,6 +1861,15 @@ class CoberturasApp {
         const who = holder ? `titular: ${holder.name}${off ? ' (de folga)' : ''}` : (shiftTaken ? 'turno já coberto' : 'vaga vazia');
         return { value: `${shift}|${slot}`, shift, open, label: `${this.turnoLabel(vaga, false, date)} — ${covered ? 'já coberta' : (requested && holder && !off ? `pedido a definir · ${who}` : who)}` };
       });
+      // a shift the post works that day with no vaga for it (e.g. the diurno of a holiday in a
+      // hybrid post): offered as a plain shift, so it can be covered
+      const listed = new Set(all.map(o => o.shift));
+      shiftsOf(s.postShiftOn(post, date)).filter(sh => !listed.has(sh)).forEach(sh => {
+        const st = s.slotStatus(post, date, sh);
+        const taken = st.presentes.length > 0 || st.coberturas.some(c => c.id !== this.cobEditId);
+        all.push({ value: `${sh}|`, shift: sh, open: !taken, label: `${SHIFT_LABEL[sh]}${holidayName(date) ? ' (feriado)' : ''} — ${taken ? 'já coberto' : 'sem vaga fixa, ninguém escalado'}` });
+      });
+      all.sort((a, b) => (a.shift === 'diurno' ? 0 : 1) - (b.shift === 'diurno' ? 0 : 1));
       options = all.filter(o => o.open || o.value === editKey);
       const openShifts = new Set(options.map(o => o.shift));
       if (s.postShiftOn(post, date) === '24h' && openShifts.has('diurno') && openShifts.has('noturno')) {
