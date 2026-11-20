@@ -31,7 +31,7 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-11-20.2';
+const APP_VERSION = '2026-11-20.3';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
@@ -139,18 +139,19 @@ function holidayName(date) {
   return '';
 }
 
-// Holiday rule of a hybrid post that applies on `date` (a holiday falling Mon–Fri), or null.
+// Holiday rule of a hybrid post that applies on `date`, or null when the day stays as usual.
 // post.hibridoFeriado: 'auto' (default) | 'normal' | 'diurno' | 'noturno' | '24h' | 'folga'.
-// auto = 24h when the post's weekend is 24h (day shift too, like sáb/dom), else a normal day.
+// An explicit rule applies on any holiday. auto (holidays falling Mon–Fri only): a post that has a
+// day shift on the weekend and works only the night on that weekday also gets the day shift (24h).
 function hybridHolidayShift(post, date) {
-  if (!post || post.escalaType !== 'hibrido') return null;
-  const dow = parseDate(date).getDay();
-  if (dow === 0 || dow === 6 || !holidayName(date)) return null;
-  const sched = post.hibridoSchedule || [];
+  if (!post || post.escalaType !== 'hibrido' || !holidayName(date)) return null;
   const rule = post.hibridoFeriado || 'auto';
   if (rule === 'normal') return null;
-  if (rule === 'auto') return sched[0] === '24h' || sched[6] === '24h' ? '24h' : null;
-  return rule;
+  if (rule !== 'auto') return rule;
+  const sched = post.hibridoSchedule || [];
+  const dow = parseDate(date).getDay();
+  const hasDay = t => t === 'diurno' || t === '24h';
+  return dow >= 1 && dow <= 5 && sched[dow] === 'noturno' && (hasDay(sched[0]) || hasDay(sched[6])) ? '24h' : null;
 }
 
 // Monday of the week (Mon→Sun) containing the date
@@ -743,6 +744,8 @@ class Schedule {
     const check = (post, date, kind) => shiftsOf(this.postShiftOn(post, date)).forEach(shift => {
       if (slotEnded(post, date, shift)) return;
       const st = this.slotStatus(post, date, shift);
+      // a holiday on the weekend is already listed as the weekend shift
+      if (list.some(x => x.post === post && x.date === date && x.shift === shift)) return;
       if (st.presentes.length === 0 && st.coberturas.length === 0) list.push({ post, date, shift, status: st, kind });
     });
     this.weekendDates(cur.date).forEach(date => {
@@ -1110,7 +1113,9 @@ class CoberturasApp {
   // requests "a definir". One entry per post/date/shift.
   allPendings() {
     const map = new Map();
-    [...(this.uncovered || []), ...(this.weekendPending || []), ...(this.requests || [])]
+    // a request "a definir" wins over the empty weekend/holiday shift it was created for, so the
+    // card opens that request instead of creating a second cobertura
+    [...(this.uncovered || []), ...(this.requests || []), ...(this.weekendPending || [])]
       .forEach(u => { if (!map.has(`${u.post.id}|${u.date}|${u.shift}`)) map.set(`${u.post.id}|${u.date}|${u.shift}`, u); });
     return [...map.values()].sort((a, b) => (a.date + a.shift + a.post.name).localeCompare(b.date + b.shift + b.post.name));
   }
@@ -1129,7 +1134,7 @@ class CoberturasApp {
     const slots = s.postSlots(post);
 
     const badgeLabel = post.escalaType === 'hibrido'
-      ? `Híbrido · hoje ${todayType === 'folga' ? 'Folga' : (todayType === '24h' ? '24h' : SHIFT_LABEL[todayType].split(' ')[1])}${hybridHolidayShift(post, today) ? ' (feriado)' : ''}`
+      ? `Híbrido · hoje ${todayType === 'folga' ? 'Folga' : (todayType === '24h' ? '24h' : SHIFT_LABEL[todayType].split(' ')[1])}${!notStarted && hybridHolidayShift(post, today) ? ' (feriado)' : ''}`
       : ({ diurno: 'Diurno', noturno: 'Noturno', '24h': '24h' }[post.escalaType] || '');
 
     // Slot table: one row per vaga, one QRA per vaga (QRAs outside the escala are listed with a warning)
@@ -1421,7 +1426,7 @@ class CoberturasApp {
     }
 
     // Sound once for each newly uncovered slot in the CURRENT shift
-    const nowKeys = new Set(this.allPendings().filter(u => u.kind !== 'fds' && u.kind !== 'feriado' && slotAlarmActive(u.post, u.date, u.shift)).map(u => `${u.post.id}|${u.date}|${u.shift}`));
+    const nowKeys = new Set(this.allPendings().filter(u => u.kind !== 'fds' && slotAlarmActive(u.post, u.date, u.shift)).map(u => `${u.post.id}|${u.date}|${u.shift}`));
     const isNew = [...nowKeys].some(k => !this.lastAlarmKeys.has(k));
     if (isNew) {
       if (!this.sound.alarm()) this.soundBlockedHint();
@@ -2052,7 +2057,7 @@ class CoberturasApp {
           <option value="folga">Folga</option><option value="normal">Dia normal</option>
         </select>
       </div>
-      <small class="form-note">Feriado em dia de semana. Automático: 24h quando o sábado ou o domingo é 24h; senão, dia normal.</small>`;
+      <small class="form-note">Automático: em feriado de seg a sex, o dia que é só noturno vira 24h quando o posto tem diurno no sábado ou domingo.</small>`;
   }
 
   updateEscalaUI(type) {
