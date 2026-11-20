@@ -20,6 +20,7 @@ App separado do QTI Monitor (banco de dados próprio). Mesmos postos (QTHs) e me
 - ☀️ **Diurno**: 07h–19h · 🌙 **Noturno**: 19h–07h (o noturno pertence ao dia em que começa).
 - **Híbridos**: noturno de seg a sex entra às **17h** (sai 07h); sábado e domingo 19h–07h.
 - **Alertas**: começam às **05:00** (diurno) e **17:00** (noturno) e duram até o fim do turno.
+- **Feriados** (nacionais + São Paulo: 25/01, 09/07, Sexta-feira Santa, Corpus Christi etc.; Carnaval não entra): posto híbrido que é 24h no fim de semana vira **24h no feriado** em dia de semana (tem diurno 07h–19h e o noturno entra às 19h). O diurno do feriado fica alertando (🎉 feriado sem ninguém) até lançar uma cobertura. Em cada posto híbrido dá para trocar a regra no campo **🎉 Feriado** (Automático, 24h, Diurno, Noturno, Folga ou Dia normal). Postos novos já nascem no Automático.
 Cada posto tem uma **tabela de vagas** e cada vaga aceita **um QRA só** (para trocar, tire o atual com ✕):
 - **24h**: Diurno par · Diurno ímpar · Noturno par · Noturno ímpar
 - **Noturno**: Noturno par · Noturno ímpar

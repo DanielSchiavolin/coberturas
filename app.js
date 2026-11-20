@@ -31,7 +31,7 @@ const DEFAULT_POSTS = [
 ];
 
 // Bump together with version.json on every deploy: open apps reload themselves when it changes
-const APP_VERSION = '2026-11-19.1';
+const APP_VERSION = '2026-11-20.1';
 
 const CATEGORY_ORDER = ['Segurança Econ', 'Segurança Nurban', 'Segurança Kallas', 'Segurança Cursino', 'Limpeza'];
 const CATEGORY_ICONS = { 'Segurança Econ': '🛡️', 'Segurança Nurban': '🏢', 'Segurança Kallas': '🔐', 'Segurança Cursino': '📍', 'Limpeza': '🧹' };
@@ -111,6 +111,48 @@ function nextParityFlip(from, to) {
   }
 }
 
+// ===== Holidays: national + São Paulo (state and city) =====
+const FIXED_HOLIDAYS = {
+  '01-01': 'Confraternização Universal', '01-25': 'Aniversário de São Paulo', '04-21': 'Tiradentes',
+  '05-01': 'Dia do Trabalho', '07-09': 'Revolução Constitucionalista', '09-07': 'Independência',
+  '10-12': 'Nossa Senhora Aparecida', '11-02': 'Finados', '11-15': 'Proclamação da República',
+  '11-20': 'Consciência Negra', '12-25': 'Natal',
+};
+
+// Easter Sunday of a year (Gregorian computus), as 'YYYY-MM-DD'
+function easterDate(year) {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+// Name of the holiday on `date`, or '' (fixed dates + Sexta-feira Santa + Corpus Christi)
+function holidayName(date) {
+  const fixed = FIXED_HOLIDAYS[date.slice(5)];
+  if (fixed) return fixed;
+  const easter = easterDate(Number(date.slice(0, 4)));
+  if (date === addDays(easter, -2)) return 'Sexta-feira Santa';
+  if (date === addDays(easter, 60)) return 'Corpus Christi';
+  return '';
+}
+
+// Holiday rule of a hybrid post that applies on `date` (a holiday falling Mon–Fri), or null.
+// post.hibridoFeriado: 'auto' (default) | 'normal' | 'diurno' | 'noturno' | '24h' | 'folga'.
+// auto = 24h when the post's weekend is 24h (day shift too, like sáb/dom), else a normal day.
+function hybridHolidayShift(post, date) {
+  if (!post || post.escalaType !== 'hibrido') return null;
+  const dow = parseDate(date).getDay();
+  if (dow === 0 || dow === 6 || !holidayName(date)) return null;
+  const sched = post.hibridoSchedule || [];
+  const rule = post.hibridoFeriado || 'auto';
+  if (rule === 'normal') return null;
+  if (rule === 'auto') return sched[0] === '24h' || sched[6] === '24h' ? '24h' : null;
+  return rule;
+}
+
 // Monday of the week (Mon→Sun) containing the date
 function weekStart(date) {
   const dow = parseDate(date).getDay();
@@ -155,7 +197,9 @@ function hhmmToMinutes(hhmm, fallback) {
 function shiftWindow(post, date, shift) {
   if (shift === 'diurno') return { start: atMinutes(date, DAY_START), end: atMinutes(date, NIGHT_START) };
   const dow = parseDate(date).getDay();
-  const startMin = post && post.escalaType === 'hibrido' && dow >= 1 && dow <= 5 ? HYBRID_WEEKDAY_NIGHT_START : NIGHT_START;
+  // a holiday with a day shift works like the weekend: the night starts at 19:00
+  const holidayDay = shiftsOf(hybridHolidayShift(post, date)).includes('diurno');
+  const startMin = post && post.escalaType === 'hibrido' && dow >= 1 && dow <= 5 && !holidayDay ? HYBRID_WEEKDAY_NIGHT_START : NIGHT_START;
   return { start: atMinutes(date, startMin), end: atMinutes(addDays(date, 1), DAY_START) };
 }
 
@@ -230,7 +274,7 @@ function postHoursLabel(post) {
   }
   const parts = [];
   if (day) parts.push('☀️ 07h–19h');
-  if (post.escalaType === 'hibrido' && nightWeek && nightWeekend) parts.push('🌙 seg–sex 17h–07h · sáb/dom 19h–07h');
+  if (post.escalaType === 'hibrido' && nightWeek && nightWeekend) parts.push('🌙 seg–sex 17h–07h · sáb/dom/feriado 19h–07h');
   else if (post.escalaType === 'hibrido' && nightWeek) parts.push('🌙 17h–07h');
   else if (nightWeek || nightWeekend) parts.push('🌙 19h–07h');
   return parts.join(' · ');
@@ -296,7 +340,7 @@ class Schedule {
     if (post.startDate && date < post.startDate) return 'folga';
     const dow = parseDate(date).getDay();
     if (post.escalaType === 'hibrido') {
-      return (post.hibridoSchedule && post.hibridoSchedule[dow]) || 'folga';
+      return hybridHolidayShift(post, date) || (post.hibridoSchedule && post.hibridoSchedule[dow]) || 'folga';
     }
     const days = Array.isArray(post.days) ? post.days : [0, 1, 2, 3, 4, 5, 6];
     return days.includes(dow) ? post.escalaType : 'folga';
@@ -691,20 +735,24 @@ class Schedule {
 
   // From Monday on, every weekend shift of a hybrid post with nobody on duty
   // (no present titular and no cobertura) stays pending until it is filled
+  // The same goes for holidays (next 7 days) that change the escala of a hybrid post.
   weekendPendingSlots() {
     const cur = currentSlot();
     const list = [];
-    this.weekendDates(cur.date).forEach(date => {
-      if (date < addDays(cur.date, -1)) return;
-      Object.values(this.posts).filter(p => p.escalaType === 'hibrido').forEach(post => {
-        shiftsOf(this.postShiftOn(post, date)).forEach(shift => {
-          if (slotEnded(post, date, shift)) return;
-          const st = this.slotStatus(post, date, shift);
-          if (st.presentes.length === 0 && st.coberturas.length === 0) list.push({ post, date, shift, status: st, kind: 'fds' });
-        });
-      });
+    const hybrids = Object.values(this.posts).filter(p => p.escalaType === 'hibrido');
+    const check = (post, date, kind) => shiftsOf(this.postShiftOn(post, date)).forEach(shift => {
+      if (slotEnded(post, date, shift)) return;
+      const st = this.slotStatus(post, date, shift);
+      if (st.presentes.length === 0 && st.coberturas.length === 0) list.push({ post, date, shift, status: st, kind });
     });
-    return list;
+    this.weekendDates(cur.date).forEach(date => {
+      if (date >= addDays(cur.date, -1)) hybrids.forEach(post => check(post, date, 'fds'));
+    });
+    for (let i = -1; i <= ALERT_DAYS_AHEAD; i++) {
+      const date = addDays(cur.date, i);
+      hybrids.filter(post => hybridHolidayShift(post, date)).forEach(post => check(post, date, 'feriado'));
+    }
+    return list.sort((a, b) => (a.date + a.shift).localeCompare(b.date + b.shift));
   }
 
   // First duty from the current slot onwards
@@ -1081,7 +1129,7 @@ class CoberturasApp {
     const slots = s.postSlots(post);
 
     const badgeLabel = post.escalaType === 'hibrido'
-      ? `Híbrido · hoje ${todayType === 'folga' ? 'Folga' : (todayType === '24h' ? '24h' : SHIFT_LABEL[todayType].split(' ')[1])}`
+      ? `Híbrido · hoje ${todayType === 'folga' ? 'Folga' : (todayType === '24h' ? '24h' : SHIFT_LABEL[todayType].split(' ')[1])}${hybridHolidayShift(post, today) ? ' (feriado)' : ''}`
       : ({ diurno: 'Diurno', noturno: 'Noturno', '24h': '24h' }[post.escalaType] || '');
 
     // Slot table: one row per vaga, one QRA per vaga (QRAs outside the escala are listed with a warning)
@@ -1135,7 +1183,7 @@ class CoberturasApp {
     // Windows that need coverage: the card flashes and says date + shift
     const pendings = this.postPendings(post);
     // Each pending says why: ⏳ request "a definir" · 🏖️ uncovered folga · 📅 empty weekend shift (hybrids)
-    const reason = { pedido: ['⏳', 'pedido de cobertura (QRA a definir)'], folga: ['🏖️', 'folga sem cobertura'], fds: ['📅', 'fim de semana sem ninguém'] };
+    const reason = { pedido: ['⏳', 'pedido de cobertura (QRA a definir)'], folga: ['🏖️', 'folga sem cobertura'], fds: ['📅', 'fim de semana sem ninguém'], feriado: ['🎉', 'feriado sem ninguém'] };
     const alertHtml = pendings.length
       ? `<div class="cover-alert">🚨 PRECISA DE COBERTURA
           <div class="cover-alert-list">${pendings.map(p => {
@@ -1250,12 +1298,12 @@ class CoberturasApp {
 
     const weekendHtml = weekend.length ? `
       <div class="agenda-day weekend-section">
-        <h3 class="agenda-date">📅 Fim de semana — coberturas pendentes <span>postos híbridos</span></h3>
+        <h3 class="agenda-date">📅 Fim de semana e feriados — coberturas pendentes <span>postos híbridos</span></h3>
         ${weekend.map(w => `
           <div class="agenda-item uncovered">
             <div class="agenda-main">
               <div class="agenda-title"><strong>${esc(w.post.name)}</strong> · ${esc(w.post.category)}</div>
-              <div class="agenda-status"><span class="who alert">${slotLabel(w.date, w.shift)}: SEM COBERTURA</span>
+              <div class="agenda-status"><span class="who alert">${w.kind === 'feriado' ? `🎉 ${esc(holidayName(w.date))} · ` : ''}${slotLabel(w.date, w.shift)}: SEM COBERTURA</span>
                 ${w.status.ausentes.map(q => `<span class="who off">🏖️ ${esc(q.name)}</span>`).join('')}</div>
             </div>
             <div class="agenda-actions">
@@ -1373,7 +1421,7 @@ class CoberturasApp {
     }
 
     // Sound once for each newly uncovered slot in the CURRENT shift
-    const nowKeys = new Set(this.allPendings().filter(u => u.kind !== 'fds' && slotAlarmActive(u.post, u.date, u.shift)).map(u => `${u.post.id}|${u.date}|${u.shift}`));
+    const nowKeys = new Set(this.allPendings().filter(u => u.kind !== 'fds' && u.kind !== 'feriado' && slotAlarmActive(u.post, u.date, u.shift)).map(u => `${u.post.id}|${u.date}|${u.shift}`));
     const isNew = [...nowKeys].some(k => !this.lastAlarmKeys.has(k));
     if (isNew) {
       if (!this.sound.alarm()) this.soundBlockedHint();
@@ -1388,7 +1436,7 @@ class CoberturasApp {
       if (Date.now() - last > 2 * 60 * 60 * 1000) {
         try { localStorage.setItem('coberturasWeekendAlertAt', String(Date.now())); } catch (e) {}
         if (!this.sound.alarm()) this.soundBlockedHint();
-        this.showToast(`📅 ${weekend.length} cobertura(s) de fim de semana pendente(s) nos postos híbridos`, 'error');
+        this.showToast(`📅 ${weekend.length} cobertura(s) de fim de semana/feriado pendente(s) nos postos híbridos`, 'error');
       }
     }
   }
@@ -1986,7 +2034,16 @@ class CoberturasApp {
           <option value="folga">Folga</option><option value="diurno">Diurno</option>
           <option value="noturno">Noturno</option><option value="24h">24h</option>
         </select>
-      </div>`).join('');
+      </div>`).join('') + `
+      <div class="hibrido-row">
+        <span>🎉 Feriado</span>
+        <select id="hibrido-feriado" class="form-select hibrido-select">
+          <option value="auto">Automático</option><option value="24h">24h</option>
+          <option value="diurno">Diurno</option><option value="noturno">Noturno</option>
+          <option value="folga">Folga</option><option value="normal">Dia normal</option>
+        </select>
+      </div>
+      <small class="form-note">Feriado em dia de semana. Automático: 24h quando o sábado ou o domingo é 24h; senão, dia normal.</small>`;
   }
 
   updateEscalaUI(type) {
@@ -2018,6 +2075,7 @@ class CoberturasApp {
     for (let i = 0; i < 7; i++) {
       document.getElementById(`hibrido-day-${i}`).value = (p && p.hibridoSchedule && p.hibridoSchedule[i]) || 'folga';
     }
+    document.getElementById('hibrido-feriado').value = (p && p.hibridoFeriado) || 'auto';
     document.getElementById('new-post-start').value = p ? (p.startDate || '') : '';
     this.showModal('add-post-modal');
   }
@@ -2055,6 +2113,8 @@ class CoberturasApp {
     const id = editId || makeId(name);
     const post = { id, name, category, escalaType, days, alertTimeDiurno, alertTimeNoturno };
     if (escalaType === 'hibrido') post.hibridoSchedule = hibridoSchedule;
+    const feriado = document.getElementById('hibrido-feriado').value;
+    if (escalaType === 'hibrido' && feriado !== 'auto') post.hibridoFeriado = feriado;
     const startDate = document.getElementById('new-post-start').value;
     if (startDate) post.startDate = startDate;
     this.hideModal('add-post-modal');
@@ -2112,7 +2172,7 @@ class CoberturasApp {
     const line = '━━━━━━━━━━━━━━━━━━━━━';
     let msg = `🛡️ *FRONT SECURITY - Coberturas*\n📅 ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}\n${line}\n\n`;
 
-    const reasonTxt = { pedido: 'QRA a definir', folga: 'folga sem cobertura', fds: 'fim de semana vago' };
+    const reasonTxt = { pedido: 'QRA a definir', folga: 'folga sem cobertura', fds: 'fim de semana vago', feriado: 'feriado vago' };
     const pend = this.allPendings();
     msg += `🔴 *COBERTURAS A RESOLVER* (${pend.length})\n`;
     msg += pend.length
@@ -2407,7 +2467,7 @@ class CoberturasApp {
 
 // Exposed for tests (Node) without touching the DOM
 if (typeof module !== 'undefined') {
-  module.exports = { Schedule, shiftsOf, prevSlot, nextSlot, addDays, toDateStr, currentSlot, shiftWindow, slotEnded, slotAlarmActive, postHoursLabel, alternationParity };
+  module.exports = { Schedule, shiftsOf, prevSlot, nextSlot, addDays, toDateStr, currentSlot, shiftWindow, slotEnded, slotAlarmActive, postHoursLabel, alternationParity, holidayName, hybridHolidayShift };
 } else {
   const app = new CoberturasApp();
   window.app = app;
